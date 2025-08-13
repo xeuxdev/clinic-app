@@ -1,5 +1,5 @@
 import { body, validationResult } from "express-validator";
-import { pool } from "../Database/init_db.js";
+import { pool } from "../db/init_db.js";
 import bcrypt from "bcrypt";
 import { generateOTP } from "../util/generateCode.js";
 import { generateRandomToken } from "../util/generateRandomToken.js";
