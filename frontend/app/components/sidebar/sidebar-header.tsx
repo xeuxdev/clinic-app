@@ -17,9 +17,6 @@ export default function SidebarHeader() {
       </div>
       <div className="flex items-center gap-1 sm:gap-3">
         <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
-          <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-10 sm:w-10">
           <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
         </Button>
 

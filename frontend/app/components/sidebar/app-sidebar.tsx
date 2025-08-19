@@ -1,13 +1,14 @@
 import {
   Activity,
-  Bell,
   Calendar,
+  CalendarPlus,
   CreditCard,
   HelpCircle,
   Home,
-  Mail,
   Settings,
   Stethoscope,
+  UserPlus,
+  Users,
 } from "lucide-react";
 import type * as React from "react";
 import { Link, useLocation } from "react-router";
@@ -22,55 +23,82 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-// Medical dashboard navigation data
-const navigationItems = [
+// Check user role from localStorage (in a real app, this would come from context/state)
+const getUserRole = () => {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("userRole") || "attendant";
+  }
+  return "attendant";
+};
+
+// Navigation items for attendant/receptionist
+const attendantNavigationItems = [
   {
     title: "Dashboard",
     url: "/",
     icon: Home,
   },
   {
-    title: "Services",
-    url: "/services",
-    icon: Stethoscope,
+    title: "Patients",
+    url: "/patients",
+    icon: Users,
   },
   {
-    title: "Appointment",
-    url: "/appointment",
+    title: "Register Patient",
+    url: "/patients/register",
+    icon: UserPlus,
+  },
+  {
+    title: "Appointments",
+    url: "/appointments",
     icon: Calendar,
   },
   {
-    title: "Payment",
-    url: "/payment",
-    icon: CreditCard,
+    title: "Book Appointment",
+    url: "/appointments/book",
+    icon: CalendarPlus,
   },
   {
-    title: "Settings",
-    url: "/settings",
-    icon: Settings,
+    title: "Payments",
+    url: "/payments",
+    icon: CreditCard,
+  },
+];
+
+// Navigation items for doctor
+const doctorNavigationItems = [
+  {
+    title: "Doctor Dashboard",
+    url: "/doctor",
+    icon: Stethoscope,
+  },
+  {
+    title: "Patients",
+    url: "/patients",
+    icon: Users,
+  },
+  {
+    title: "Appointments",
+    url: "/appointments",
+    icon: Calendar,
   },
 ];
 
 const bottomNavigationItems = [
   {
-    title: "Inbox",
-    url: "/inbox",
-    icon: Mail,
-  },
-  {
-    title: "Notification",
-    url: "/notification",
-    icon: Bell,
-  },
-  {
-    title: "Help",
-    url: "/help",
-    icon: HelpCircle,
+    title: "Role Selection",
+    url: "/auth/role-selection",
+    icon: Settings,
   },
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation();
+  const userRole = getUserRole();
+
+  // Choose navigation items based on user role
+  const navigationItems =
+    userRole === "doctor" ? doctorNavigationItems : attendantNavigationItems;
 
   return (
     <Sidebar {...props}>
@@ -80,8 +108,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <Activity className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">MediCare</h2>
-            <p className="text-sm text-gray-600">Healthcare Portal</p>
+            <h2 className="text-lg font-semibold text-gray-900">
+              🏥 Clinic MS
+            </h2>
+            <p className="text-sm text-gray-600 capitalize">
+              {userRole} Portal
+            </p>
           </div>
         </div>
       </SidebarHeader>
