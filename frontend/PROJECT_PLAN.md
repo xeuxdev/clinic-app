@@ -90,19 +90,19 @@ A simplified clinic management system for college project focusing on real clini
 ### **Required Tables:**
 
 ```sql
-1. patients 
+1. patients
    - id, name, phone, age, address, medical_history
 
-2. doctors 
+2. doctors
    - id, name, specialization
 
-3. appointments 
+3. appointments
    - id, patient_id, doctor_id, date, time, status, payment_status
 
-4. consultations 
+4. consultations
    - id, appointment_id, notes, prescriptions, recommendations
 
-5. payments 
+5. payments
    - id, patient_id, amount, date, method
 ```
 
@@ -169,7 +169,7 @@ A simplified clinic management system for college project focusing on real clini
 ### **Backend (Proposed):**
 
 - Node.js + Express
-- SQLite database (simple setup)
+- PostgresQL database (simple setup)
 - Basic REST API
 - Simple session management
 

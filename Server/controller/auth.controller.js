@@ -1,16 +1,22 @@
-import { body, validationResult } from "express-validator";
+import { body, param, validationResult } from "express-validator";
 import { pool } from "../db/init_db.js";
 import bcrypt from "bcrypt";
 import { generateOTP } from "../util/generateCode.js";
 import { generateRandomToken } from "../util/generateRandomToken.js";
+import { setSession } from "../util/setSession.js";
+import { sendEmail } from "../mail/email.config.js";
+import { emailTemplates } from "../mail/templates.js";
 
 export const userLogin = [
   // Validation rules
-  body("email").isEmail()
-    .withMessage("Invalid email format").normalizeEmail(),
+  body("email")
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email format")
+    .normalizeEmail(),
+
   body("password")
-    .isLength({ min: 6 })
-    .withMessage("Password must be at least 6 characters"),
+    .notEmpty().withMessage("Password is required")
+    .isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
   // Controller
   async (req, res) => {
     const errors = validationResult(req);
@@ -47,6 +53,7 @@ export const userLogin = [
         `SELECT * FROM "user".profile WHERE account_id = $1`,
         [dbUser.id]
       );
+      setSession(loggedInUser.rows[0].id);
       res.status(200).json({
         success: true,
         message: "User logged in",
@@ -64,33 +71,47 @@ export const userLogin = [
 export const userRegister = [
   // validation rules
   body("email")
+    .notEmpty().withMessage("Email is required")
     .isEmail().withMessage("Invalid email format")
     .normalizeEmail(),
+
   body("password")
+    .notEmpty().withMessage("Password is required")
     .isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
-  body('phone_number')
-    .isMobilePhone().withMessage('Invalid phone number'),
+
+  body("phone_number")
+    .notEmpty().withMessage("Phone number is required")
+    .isMobilePhone().withMessage("Invalid phone number"),
+
   body("full_name")
-    .trim().notEmpty().withMessage("Full name is required")
-    .escape(),
-  body('date_of_birth')
-    .isDate({ format: 'YYYY-MM-DD', strictMode: true })
-    .withMessage('Date of birth must be in YYYY-MM-DD format'),
-  body('blood_group')
+    .notEmpty().withMessage("Full name is required")
+    .trim().escape(),
+
+  body("date_of_birth")
+    .notEmpty().withMessage("Date of birth is required")
+    .isDate({ format: "YYYY-MM-DD", strictMode: true })
+    .withMessage("Date of birth must be in YYYY-MM-DD format"),
+
+  body("blood_group")
+    .notEmpty().withMessage("Blood group is required")
     .isIn(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
-    .withMessage('Invalid blood group'),
-  body('medical_condition')
-    .optional({ checkFalsy: true })
-    .isLength({ max: 255 }).withMessage('Medical condition must be 255 characters or less')
+    .withMessage("Invalid blood group"),
+
+  body("medical_condition")
+    .optional({ checkFalsy: true }) // allow empty/null
+    .isLength({ max: 255 }).withMessage("Medical condition must be 255 characters or less")
     .escape(),
-  body('current_medication')
+
+  body("current_medication")
     .optional({ checkFalsy: true })
-    .isLength({ max: 255 }).withMessage('Current medication must be 255 characters or less')
+    .isLength({ max: 255 }).withMessage("Current medication must be 255 characters or less")
     .escape(),
-  body('known_allergies')
+
+  body("known_allergies")
     .optional({ checkFalsy: true })
-    .isLength({ max: 255 }).withMessage('Known allergies must be 255 characters or less')
+    .isLength({ max: 255 }).withMessage("Known allergies must be 255 characters or less")
     .escape(),
+
 
   // controller
   async (req, res) => {
@@ -109,11 +130,12 @@ export const userRegister = [
     } = req.body;
 
     try {
-      // Check if email exists
+      // Check if email/account exists
       const existingUser = await pool.query(
-        `SELECT * FROM "user".profile WHERE email = $1`,
+        `SELECT * FROM auth.accounts WHERE email = $1`,
         [email]
       );
+
 
       if (existingUser.rowCount > 0) {
         return res.status(400).json({
@@ -150,7 +172,8 @@ export const userRegister = [
           known_allergies || null
         ]
       );
-
+      setSession(newProfile.rows[0].id)
+      await sendEmail(newAccount.rows[0].email, emailTemplates.welcome(newProfile.rows[0].full_name))
       res.status(201).json({
         success: true,
         message: "Account created",
@@ -210,7 +233,8 @@ export const requestPasswordResetLink = [
 
       // Send reset link via email
       const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${reset_password_token}`;
-      await sendPasswordResetLink(email, user.rows[0].full_name, resetLink);
+      await sendEmail(email, emailTemplates.requestPassword(user.rows[0].full_name, resetLink));
+
 
       return res.status(200).json({
         success: true,
@@ -219,6 +243,80 @@ export const requestPasswordResetLink = [
 
     } catch (error) {
       console.error("Password reset error:", error.message);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  }
+];
+export const changePassword = [
+  param('reset_password_token').isString(),
+  body('new_password')
+    .isLength({ min: 8 })
+    .withMessage("Password must be at least 8 characters"),
+
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: errors.array()[0].msg
+      });
+    }
+
+    const { reset_password_token } = req.params;
+    const { new_password } = req.body;
+
+    try {
+      // Find account with token
+      const accountResult = await pool.query(
+        `SELECT * FROM auth.accounts WHERE reset_password_token=$1`,
+        [reset_password_token]
+      );
+
+      if (
+        accountResult.rowCount === 0 ||
+        new Date(accountResult.rows[0].reset_password_token_expiry) < new Date()
+      ) {
+        return res.status(404).json({
+          success: false,
+          message: "Invalid or expired token"
+        });
+      }
+
+      const account = accountResult.rows[0];
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(new_password, 10);
+
+      // Update account and clear token
+      await pool.query(
+        `UPDATE auth.accounts
+         SET password=$1, reset_password_token=NULL, reset_password_token_expiry=NULL
+         WHERE id=$2`,
+        [hashedPassword, account.id]
+      );
+
+      // Get profile
+      const profileResult = await pool.query(
+        `SELECT * FROM "user".profile WHERE account_id=$1`,
+        [account.id]
+      );
+
+      // Send success email
+      await sendEmail(
+        account.email,
+        emailTemplates.resetSuccess(profileResult.rows[0].full_name)
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Password reset successful"
+      });
+
+    } catch (error) {
+      console.error("Password change error:", error.message);
       return res.status(500).json({
         success: false,
         message: "Internal server error"
