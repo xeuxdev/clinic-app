@@ -68,7 +68,7 @@ export const userLogin = [
     }
   },
 ];
-export const userRegister = [
+export const patientRegister = [
   // validation rules
   body("email")
     .notEmpty().withMessage("Email is required")
@@ -317,6 +317,68 @@ export const changePassword = [
 
     } catch (error) {
       console.error("Password change error:", error.message);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error"
+      });
+    }
+  }
+];
+export const userRegister = [
+  body("email")
+    .notEmpty().withMessage("Email is required")
+    .isEmail().withMessage("Invalid email format")
+    .normalizeEmail(),
+
+  body("password")
+    .notEmpty().withMessage("Password is required")
+    .isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+
+  body("phone_number")
+    .notEmpty().withMessage("Phone number is required")
+    .isMobilePhone().withMessage("Invalid phone number"),
+
+  body("full_name")
+    .notEmpty().withMessage("Full name is required")
+    .trim().escape(),
+
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: errors.array()[0].msg
+      });
+    }
+
+    const { email, password, phone_number, full_name } = req.body;
+
+    try {
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Insert account with role 'receptionist'
+      const newAccount = await pool.query(
+        `INSERT INTO auth.accounts (email, password, role)
+         VALUES ($1, $2, $3) RETURNING *`,
+        [email, hashedPassword, 'receptionist']
+      );
+
+      // Insert profile
+      const newProfile = await pool.query(
+        `INSERT INTO "user".profile (account_id, full_name, phone_number)
+         VALUES ($1, $2, $3) RETURNING *`,
+        [newAccount.rows[0].id, full_name, phone_number]
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "Receptionist account created successfully",
+        user: newProfile.rows[0]
+      });
+
+    } catch (error) {
+      console.error(" Error registering receptionist:", error);
       return res.status(500).json({
         success: false,
         message: "Internal server error"
