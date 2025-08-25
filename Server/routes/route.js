@@ -5,7 +5,7 @@ import { verifySession } from '../middleware/verifySession.js';
 import { verifyRole } from '../middleware/verifyRole.js';
 import { addDoctor_receptionist, get_doctor_receptionist } from '../controller/Cdoctor.controller.js';
 export const authRoute = express.Router();
-authRoute.post('/register-patient',verifySession(),verifyRole,patientRegister)
+authRoute.post('/register-patient',verifySession,verifyRole,patientRegister)
 authRoute.post('/register-user',userRegister)
 authRoute.post('/login', userLogin)
 authRoute.post('/request_password_reset',requestPasswordResetLink);

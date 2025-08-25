@@ -2,6 +2,7 @@ import express from 'express'
 import dotenv from 'dotenv'
 import { connectDB } from './db/connectDB.js'
 import cors from 'cors'
+import cookieParser from "cookie-parser";
 import { appointmentRoute, authRoute } from './routes/route.js'
 dotenv.config()
 
@@ -9,6 +10,7 @@ const app = express()
 const PORT = process.env.PORT || 6000
 
 app.use(express.json())
+app.use(cookieParser());
 app.use(cors({
   origin: process.env.FRONTEND_URL,
   credentials: true
