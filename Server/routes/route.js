@@ -3,6 +3,7 @@ import { changePassword, patientRegister, requestPasswordResetLink, userLogin, u
 import { addAppointment, cancelAppointment, completeAppointment, listAppointment, rescheduleAppointment, startAppointment } from '../controller/appointment.controller';
 import { verifySession } from '../middleware/verifySession';
 import { verifyRole } from '../middleware/verifyRole';
+import { addDoctor_receptionist, get_doctor_receptionist } from '../controller/Cdoctor.controller';
 export const authRoute = express.Router();
 authRoute.post('/register-patient',verifySession(),verifyRole,patientRegister)
 authRoute.post('/register-user',userRegister)
@@ -18,4 +19,7 @@ appointmentRoute.post('/appointment/in_progress/:appointment_id',verifySession, 
 appointmentRoute.post('/appointment/reschedule/:appointment_id',verifySession, verifyRole,rescheduleAppointment);
 appointmentRoute.post('/appointment/complete/:appointment_id',verifySession, verifyRole, completeAppointment)
 
+export const doctor_receptionistRoute = express.Router();
+doctor_receptionistRoute.post('/doctor_receptionist/register',verifySession,verifyRole, addDoctor_receptionist)
+doctor_receptionistRoute.get('/doctor_receptionist/get_doctor_receptionist/role',verifySession,verifyRole,get_doctor_receptionist)
 
