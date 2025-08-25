@@ -1,9 +1,9 @@
 import express from 'express';
-import { changePassword, patientRegister, requestPasswordResetLink, userLogin, userRegister } from '../controller/auth.controller';
-import { addAppointment, cancelAppointment, completeAppointment, listAppointment, rescheduleAppointment, startAppointment } from '../controller/appointment.controller';
-import { verifySession } from '../middleware/verifySession';
-import { verifyRole } from '../middleware/verifyRole';
-import { addDoctor_receptionist, get_doctor_receptionist } from '../controller/Cdoctor.controller';
+import { changePassword, patientRegister, requestPasswordResetLink, userLogin, userRegister } from '../controller/auth.controller.js';
+import { addAppointment, cancelAppointment, completeAppointment, listAppointment, rescheduleAppointment, startAppointment } from '../controller/appointment.controller.js';
+import { verifySession } from '../middleware/verifySession.js';
+import { verifyRole } from '../middleware/verifyRole.js';
+import { addDoctor_receptionist, get_doctor_receptionist } from '../controller/Cdoctor.controller.js';
 export const authRoute = express.Router();
 authRoute.post('/register-patient',verifySession(),verifyRole,patientRegister)
 authRoute.post('/register-user',userRegister)

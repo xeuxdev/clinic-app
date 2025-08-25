@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { emailTemplates } from "./emailTemplates.js";
+
 
 const transporter = nodemailer.createTransport({
   service: "gmail", // or your SMTP

@@ -1,5 +1,5 @@
 import { body, param, validationResult } from "express-validator"
-import { pool } from "../db/init_db";
+import { pool } from "../db/init_db.js";
 import bcrypt from "bcrypt"
 
 export const addDoctor_receptionist =[
