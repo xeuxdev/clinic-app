@@ -10,13 +10,17 @@ import { emailTemplates } from "../mail/templates.js";
 export const userLogin = [
   // Validation rules
   body("email")
-    .notEmpty().withMessage("Email is required")
-    .isEmail().withMessage("Invalid email format")
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format")
     .normalizeEmail(),
 
   body("password")
-    .notEmpty().withMessage("Password is required")
-    .isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+    .notEmpty()
+    .withMessage("Password is required")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
   // Controller
   async (req, res) => {
     const errors = validationResult(req);
@@ -53,7 +57,9 @@ export const userLogin = [
         `SELECT * FROM "user".profile WHERE account_id = $1`,
         [dbUser.id]
       );
-      setSession(loggedInUser.rows[0].id);
+
+      // res was not passed here previously
+      setSession(res, loggedInUser.rows[0].id);
       res.status(200).json({
         success: true,
         message: "User logged in",
@@ -71,47 +77,59 @@ export const userLogin = [
 export const patientRegister = [
   // validation rules
   body("email")
-    .notEmpty().withMessage("Email is required")
-    .isEmail().withMessage("Invalid email format")
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format")
     .normalizeEmail(),
 
   body("password")
-    .notEmpty().withMessage("Password is required")
-    .isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+    .notEmpty()
+    .withMessage("Password is required")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
 
   body("phone_number")
-    .notEmpty().withMessage("Phone number is required")
-    .isMobilePhone().withMessage("Invalid phone number"),
+    .notEmpty()
+    .withMessage("Phone number is required")
+    .isMobilePhone()
+    .withMessage("Invalid phone number"),
 
   body("full_name")
-    .notEmpty().withMessage("Full name is required")
-    .trim().escape(),
+    .notEmpty()
+    .withMessage("Full name is required")
+    .trim()
+    .escape(),
 
   body("date_of_birth")
-    .notEmpty().withMessage("Date of birth is required")
+    .notEmpty()
+    .withMessage("Date of birth is required")
     .isDate({ format: "YYYY-MM-DD", strictMode: true })
     .withMessage("Date of birth must be in YYYY-MM-DD format"),
 
   body("blood_group")
-    .notEmpty().withMessage("Blood group is required")
-    .isIn(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'])
+    .notEmpty()
+    .withMessage("Blood group is required")
+    .isIn(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"])
     .withMessage("Invalid blood group"),
 
   body("medical_condition")
     .optional({ checkFalsy: true }) // allow empty/null
-    .isLength({ max: 255 }).withMessage("Medical condition must be 255 characters or less")
+    .isLength({ max: 255 })
+    .withMessage("Medical condition must be 255 characters or less")
     .escape(),
 
   body("current_medication")
     .optional({ checkFalsy: true })
-    .isLength({ max: 255 }).withMessage("Current medication must be 255 characters or less")
+    .isLength({ max: 255 })
+    .withMessage("Current medication must be 255 characters or less")
     .escape(),
 
   body("known_allergies")
     .optional({ checkFalsy: true })
-    .isLength({ max: 255 }).withMessage("Known allergies must be 255 characters or less")
+    .isLength({ max: 255 })
+    .withMessage("Known allergies must be 255 characters or less")
     .escape(),
-
 
   // controller
   async (req, res) => {
@@ -119,14 +137,20 @@ export const patientRegister = [
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: errors.array()[0].msg
+        message: errors.array()[0].msg,
       });
     }
 
     const {
-      email, password, phone_number, full_name,
-      date_of_birth, blood_group, medical_condition,
-      current_medication, known_allergies
+      email,
+      password,
+      phone_number,
+      full_name,
+      date_of_birth,
+      blood_group,
+      medical_condition,
+      current_medication,
+      known_allergies,
     } = req.body;
 
     try {
@@ -136,11 +160,10 @@ export const patientRegister = [
         [email]
       );
 
-
       if (existingUser.rowCount > 0) {
         return res.status(400).json({
           success: false,
-          message: 'User with this email already exists'
+          message: "User with this email already exists",
         });
       }
 
@@ -169,37 +192,37 @@ export const patientRegister = [
           blood_group,
           medical_condition || null,
           current_medication || null,
-          known_allergies || null
+          known_allergies || null,
         ]
       );
-      setSession(newProfile.rows[0].id)
-      await sendEmail(newAccount.rows[0].email, emailTemplates.welcome(newProfile.rows[0].full_name))
+      setSession(newProfile.rows[0].id);
+      await sendEmail(
+        newAccount.rows[0].email,
+        emailTemplates.welcome(newProfile.rows[0].full_name)
+      );
       res.status(201).json({
         success: true,
         message: "Account created",
-        user: newProfile.rows[0]
+        user: newProfile.rows[0],
       });
-
     } catch (error) {
       console.error("Error registering user:", error.message);
       res.status(500).json({
         success: false,
-        message: 'Internal server error'
+        message: "Internal server error",
       });
     }
-  }
+  },
 ];
 export const requestPasswordResetLink = [
-  body("email")
-    .isEmail().withMessage("Invalid email format")
-    .normalizeEmail(),
+  body("email").isEmail().withMessage("Invalid email format").normalizeEmail(),
 
   async (req, res) => {
     const error = validationResult(req);
     if (!error.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: error.array()[0].msg
+        message: error.array()[0].msg,
       });
     }
 
@@ -215,7 +238,7 @@ export const requestPasswordResetLink = [
       if (user.rowCount === 0) {
         return res.status(404).json({
           success: false,
-          message: "No user with this email"
+          message: "No user with this email",
         });
       }
 
@@ -233,26 +256,27 @@ export const requestPasswordResetLink = [
 
       // Send reset link via email
       const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${reset_password_token}`;
-      await sendEmail(email, emailTemplates.requestPassword(user.rows[0].full_name, resetLink));
-
+      await sendEmail(
+        email,
+        emailTemplates.requestPassword(user.rows[0].full_name, resetLink)
+      );
 
       return res.status(200).json({
         success: true,
-        message: "Password reset link sent to your email"
+        message: "Password reset link sent to your email",
       });
-
     } catch (error) {
       console.error("Password reset error:", error.message);
       return res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: "Internal server error",
       });
     }
-  }
+  },
 ];
 export const changePassword = [
-  param('reset_password_token').isString(),
-  body('new_password')
+  param("reset_password_token").isString(),
+  body("new_password")
     .isLength({ min: 8 })
     .withMessage("Password must be at least 8 characters"),
 
@@ -261,7 +285,7 @@ export const changePassword = [
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: errors.array()[0].msg
+        message: errors.array()[0].msg,
       });
     }
 
@@ -281,7 +305,7 @@ export const changePassword = [
       ) {
         return res.status(404).json({
           success: false,
-          message: "Invalid or expired token"
+          message: "Invalid or expired token",
         });
       }
 
@@ -312,43 +336,50 @@ export const changePassword = [
 
       res.status(200).json({
         success: true,
-        message: "Password reset successful"
+        message: "Password reset successful",
       });
-
     } catch (error) {
       console.error("Password change error:", error.message);
       return res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: "Internal server error",
       });
     }
-  }
+  },
 ];
 
 export const userRegister = [
   body("email")
-    .notEmpty().withMessage("Email is required")
-    .isEmail().withMessage("Invalid email format")
+    .notEmpty()
+    .withMessage("Email is required")
+    .isEmail()
+    .withMessage("Invalid email format")
     .normalizeEmail(),
 
   body("password")
-    .notEmpty().withMessage("Password is required")
-    .isLength({ min: 6 }).withMessage("Password must be at least 6 characters"),
+    .notEmpty()
+    .withMessage("Password is required")
+    .isLength({ min: 6 })
+    .withMessage("Password must be at least 6 characters"),
 
   body("phone_number")
-    .notEmpty().withMessage("Phone number is required")
-    .isMobilePhone().withMessage("Invalid phone number"),
+    .notEmpty()
+    .withMessage("Phone number is required")
+    .isMobilePhone()
+    .withMessage("Invalid phone number"),
 
   body("full_name")
-    .notEmpty().withMessage("Full name is required")
-    .trim().escape(),
+    .notEmpty()
+    .withMessage("Full name is required")
+    .trim()
+    .escape(),
 
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: errors.array()[0].msg
+        message: errors.array()[0].msg,
       });
     }
 
@@ -362,7 +393,7 @@ export const userRegister = [
       const newAccount = await pool.query(
         `INSERT INTO auth.accounts (email, password, role)
          VALUES ($1, $2, $3) RETURNING *`,
-        [email, hashedPassword, 'receptionist']
+        [email, hashedPassword, "receptionist"]
       );
 
       // Insert profile
@@ -375,15 +406,14 @@ export const userRegister = [
       return res.status(201).json({
         success: true,
         message: "Receptionist account created successfully",
-        user: newProfile.rows[0]
+        user: newProfile.rows[0],
       });
-
     } catch (error) {
       console.error(" Error registering receptionist:", error);
       return res.status(500).json({
         success: false,
-        message: "Internal server error"
+        message: "Internal server error",
       });
     }
-  }
+  },
 ];

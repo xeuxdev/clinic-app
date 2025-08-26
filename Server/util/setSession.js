@@ -5,11 +5,9 @@ export const setSession = (res, userId) => {
     throw new Error("JWT key not provided");
   }
 
-  const token = jwt.sign(
-    { userId },
-    process.env.JWT_SECRET,
-    { expiresIn: "2d" }
-  );
+  const token = jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: "2d",
+  });
 
   const cookieName = "HealthCare_session";
 
