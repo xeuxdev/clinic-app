@@ -9,7 +9,7 @@ authRoute.post('/register-patient',verifySession,verifyRole,patientRegister)
 authRoute.post('/register-user',userRegister)
 authRoute.post('/login', userLogin)
 authRoute.post('/request_password_reset',requestPasswordResetLink);
-authRoute.post('/change_password',changePassword)
+authRoute.post('/change_password/reset_password_token',changePassword)
 
 export const appointmentRoute = express.Router();
 appointmentRoute.post('/appointment/add-appointment',verifySession, verifyRole,addAppointment);
