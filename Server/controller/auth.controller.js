@@ -324,6 +324,7 @@ export const changePassword = [
     }
   }
 ];
+
 export const userRegister = [
   body("email")
     .notEmpty().withMessage("Email is required")
