@@ -21,7 +21,7 @@ export const addAppointment = [
     const { profile_id, appointment_date, doctor_id, email, notes } = req.body;
 
     try {
-      
+
       //  Check if patient exists
       const patient_account = await pool.query(
         `SELECT * FROM auth.accounts WHERE email = $1`,
