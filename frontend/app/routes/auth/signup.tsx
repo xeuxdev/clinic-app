@@ -1,8 +1,10 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
 import { Link } from "react-router";
+import { z } from "zod";
+import { useSignUp } from "~/api/auth";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { Input, PasswordInput } from "~/components/ui/input";
-import { Icons } from "~/components/ui/icons";
 import {
   Form,
   FormControl,
@@ -11,9 +13,8 @@ import {
   FormLabel,
   FormMessage,
 } from "~/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { Icons } from "~/components/ui/icons";
+import { Input, PasswordInput } from "~/components/ui/input";
 
 const signupSchema = z
   .object({
@@ -38,6 +39,8 @@ export function meta() {
 }
 
 export default function Signup() {
+  const { mutateAsync } = useSignUp();
+
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
@@ -50,8 +53,12 @@ export default function Signup() {
   });
 
   const onSubmit = async (data: SignupForm) => {
-    // TODO: Implement signup logic
-    console.log("Signup data:", data);
+    mutateAsync({
+      full_name: data.fullName,
+      email: data.email,
+      phone_number: data.phoneNumber,
+      password: data.password,
+    });
   };
 
   return (
