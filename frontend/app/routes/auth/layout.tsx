@@ -1,4 +1,23 @@
-import { Outlet } from "react-router";
+import { Outlet, redirect } from "react-router";
+import type { Route } from "./+types/layout";
+
+export async function loader({ request }: Route.LoaderArgs) {
+  const cookieHeader = request.headers.get("Cookie");
+  const cookie = Object.fromEntries(
+    cookieHeader?.split("; ").map((c) => c.split("=")) || []
+  );
+
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  if (path === "/auth/logout") {
+    return null;
+  }
+
+  if (cookie["HealthCare_session"]) {
+    return redirect("/");
+  }
+}
 
 export default function AuthLayout() {
   return (

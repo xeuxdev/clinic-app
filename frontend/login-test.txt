@@ -1,8 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router";
+import { Link, redirect, useActionData, useSubmit } from "react-router";
 import { z } from "zod";
-import { useLogin } from "~/api/auth";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import {
@@ -15,6 +14,13 @@ import {
 } from "~/components/ui/form";
 import { Icons } from "~/components/ui/icons";
 import { Input } from "~/components/ui/input";
+import type { Route } from "./+types/login";
+import { commitSession, getSession } from "~/sessions.server";
+import { postRequest } from "~/lib/http";
+import { API_ENDPOINTS } from "~/lib/api-endpoints";
+import type { LoginPayload, LoginResponse } from "~/api/types";
+import { useEffect } from "react";
+import { showErrorToast, showSuccessToast } from "~/lib/utils";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -30,8 +36,63 @@ export function meta() {
   ];
 }
 
+async function validateCredentials(email: string, password: string) {
+  try {
+    const response = await postRequest<LoginResponse, LoginPayload>({
+      url: API_ENDPOINTS.AUTH.LOGIN,
+      payload: { email, password },
+    });
+
+    console.log(response);
+
+    return response;
+  } catch (error: any) {
+    const data = error?.response.data;
+    console.log(data);
+    return data;
+  }
+}
+
+export async function action({ request }: Route.ActionArgs) {
+  const session = await getSession(request.headers.get("Cookie"));
+  const form = await request.formData();
+  const email = form.get("email") as string;
+  const password = form.get("password") as string;
+
+  if (!email || !password) {
+    session.flash("error", "Email and password are required");
+    return redirect("/auth/login", {
+      headers: {
+        "Set-Cookie": await commitSession(session),
+      },
+    });
+  }
+
+  const response = await validateCredentials(email, password);
+
+  console.log(response);
+
+  if (!response.success) {
+    return {
+      success: response.success,
+      message: response.message || "Login failed",
+    };
+  }
+
+  session.set("userId", response.user.id);
+  session.set("accessToken", response.access_token);
+
+  // Login succeeded, send them to the home page.
+  return redirect("/", {
+    headers: {
+      "Set-Cookie": await commitSession(session),
+    },
+  });
+}
+
 export default function LoginPage() {
-  const { mutateAsync } = useLogin();
+  const actionData = useActionData<typeof action>(); // Get data returned from the action
+  let submit = useSubmit();
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -44,8 +105,18 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginForm) => {
     console.log("Login data:", data);
 
-    mutateAsync(data);
+    submit({ email: data.email, password: data.password }, { method: "post" });
   };
+
+  useEffect(() => {
+    if (!actionData?.success) {
+      showErrorToast(actionData?.message);
+      return;
+    } else {
+      showSuccessToast(actionData.message);
+      return;
+    }
+  }, [actionData]);
 
   return (
     <div className="space-y-6">
@@ -146,3 +217,31 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+
+import { createCookieSessionStorage } from "react-router";
+
+type SessionData = {
+  userId: string;
+  accessToken: string;
+};
+
+type SessionFlashData = {
+  error: string;
+};
+
+const { getSession, commitSession, destroySession } =
+  createCookieSessionStorage<SessionData, SessionFlashData>({
+    // a Cookie from `createCookie` or the CookieOptions to create one
+    cookie: {
+      name: "__health_session",
+      httpOnly: true,
+      maxAge: 60 * 60 * 24,
+      path: "/",
+      sameSite: "strict",
+      secure: true,
+    },
+  });
+
+export { getSession, commitSession, destroySession };
