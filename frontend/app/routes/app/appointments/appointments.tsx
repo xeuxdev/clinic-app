@@ -1,6 +1,8 @@
 import { Calendar, Clock, Eye, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { useListAppointments, useSearchAppointments } from "~/api/appointments";
+import type { Appointment as ApiAppointment } from "~/api/types";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -20,12 +22,23 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import {
-  demoAppointments,
-  getDoctorById,
-  getPatientById,
-  type Appointment,
-} from "~/lib/demo-data";
+import type { Appointment } from "~/lib/demo-data";
+
+type MappedAppointment = {
+  patient_name?: string;
+  patient_phone?: string;
+  patient_email?: string;
+  doctor_name?: string;
+  doctor_email?: string;
+  id: string;
+  patientId?: string;
+  doctorId?: string;
+  date: string;
+  time: string;
+  status: Appointment["status"];
+  paymentStatus: Appointment["paymentStatus"];
+  notes?: string;
+};
 
 export function meta() {
   return [
@@ -44,21 +57,72 @@ export default function AppointmentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // React Query hooks (list + search)
+  const listQuery = useListAppointments();
+  const searchQueryResult = useSearchAppointments(searchQuery);
+
+  // Transform API booking shape to the local demo Appointment shape
+  const transformBooking = (b: Partial<ApiAppointment>): MappedAppointment => {
+    const dateObj = b.appointment_date
+      ? new Date(b.appointment_date)
+      : new Date();
+    const date = dateObj.toISOString().split("T")[0];
+    const time = dateObj.toTimeString().slice(0, 5);
+
+    const statusMap: Record<string, Appointment["status"]> = {
+      booked: "scheduled",
+      in_progress: "in-progress",
+      completed: "completed",
+      cancelled: "cancelled",
+      rescheduled: "scheduled",
+    };
+
+    const mapped: MappedAppointment = {
+      id: String(b.id ?? ""),
+      patientId: String(b.profile_id ?? ""),
+      doctorId: String(b.doctor_id ?? ""),
+      date,
+      time,
+      status:
+        b.status && statusMap[b.status] ? statusMap[b.status] : "scheduled",
+      paymentStatus: "paid",
+      notes: (b.note ?? "") as string,
+    };
+
+    // attach API-provided display fields as metadata so rendering can fall back to them
+    if (b.patient_name) mapped.patient_name = b.patient_name;
+    if (b.patient_phone) mapped.patient_phone = b.patient_phone;
+    if (b.patient_email) mapped.patient_email = b.patient_email;
+    if (b.doctor_name) mapped.doctor_name = b.doctor_name;
+    if (b.doctor_email) mapped.doctor_email = b.doctor_email;
+
+    return mapped;
+  };
+
+  // Prefer search results when a query is present, otherwise use list
+  const apiBookings = searchQuery
+    ? searchQueryResult.data?.bookings
+    : listQuery.data?.bookings;
+
+  // Build source appointments (map API bookings to local shape when present)
+  // If the API hasn't returned yet, use an empty list — everything depends on the API now
+  const sourceAppointments: MappedAppointment[] = Array.isArray(apiBookings)
+    ? apiBookings.map(transformBooking)
+    : [];
+
   // Filter appointments based on selected criteria
-  const filteredAppointments = demoAppointments.filter((appointment) => {
+  const filteredAppointments = sourceAppointments.filter((appointment) => {
     const matchesDate = appointment.date === selectedDate;
     const matchesStatus =
       statusFilter === "all" || appointment.status === statusFilter;
 
     let matchesSearch = true;
     if (searchQuery) {
-      const patient = getPatientById(appointment.patientId);
-      const doctor = getDoctorById(appointment.doctorId);
       const searchLower = searchQuery.toLowerCase();
       matchesSearch =
-        patient?.name.toLowerCase().includes(searchLower) ||
-        doctor?.name.toLowerCase().includes(searchLower) ||
-        patient?.phone.includes(searchQuery) ||
+        !!appointment.patient_name?.toLowerCase().includes(searchLower) ||
+        !!appointment.doctor_name?.toLowerCase().includes(searchLower) ||
+        !!appointment.patient_phone?.includes(searchQuery) ||
         appointment.time.includes(searchQuery);
     }
 
@@ -95,7 +159,7 @@ export default function AppointmentsPage() {
   };
 
   const getStatusCounts = () => {
-    const dayAppointments = demoAppointments.filter(
+    const dayAppointments = sourceAppointments.filter(
       (a) => a.date === selectedDate
     );
     return {
@@ -269,8 +333,15 @@ export default function AppointmentsPage() {
               </TableHeader>
               <TableBody>
                 {filteredAppointments.map((appointment) => {
-                  const patient = getPatientById(appointment.patientId);
-                  const doctor = getDoctorById(appointment.doctorId);
+                  // Use API-provided fields only (no demo lookups)
+                  const mappedAppt = appointment as MappedAppointment;
+                  const patientName = mappedAppt.patient_name ?? "Unknown";
+                  const patientAge = null;
+                  const patientPhone = mappedAppt.patient_phone ?? "";
+                  const patientEmail = mappedAppt.patient_email ?? "";
+
+                  const doctorName = mappedAppt.doctor_name ?? "Unknown";
+                  const doctorSpec = "";
 
                   return (
                     <TableRow key={appointment.id}>
@@ -284,24 +355,22 @@ export default function AppointmentsPage() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{patient?.name}</p>
+                          <p className="font-medium">{patientName}</p>
                           <p className="text-sm text-gray-500">
-                            Age: {patient?.age}
+                            {patientAge ? `Age: ${patientAge}` : null}
                           </p>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{doctor?.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {doctor?.specialization}
-                          </p>
+                          <p className="font-medium">{doctorName}</p>
+                          <p className="text-sm text-gray-500">{doctorSpec}</p>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          <p>{patient?.phone}</p>
-                          <p className="text-gray-500">{patient?.email}</p>
+                          <p>{patientPhone}</p>
+                          <p className="text-gray-500">{patientEmail}</p>
                         </div>
                       </TableCell>
                       <TableCell>

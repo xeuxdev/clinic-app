@@ -22,14 +22,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "~/components/ui/sidebar";
-
-// Check user role from localStorage (in a real app, this would come from context/state)
-const getUserRole = () => {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("userRole") || "attendant";
-  }
-  return "attendant";
-};
+import { useUser } from "~/context/user-context";
 
 // Navigation items for attendant/receptionist
 const attendantNavigationItems = [
@@ -86,15 +79,17 @@ const doctorNavigationItems = [
 
 const bottomNavigationItems = [
   {
-    title: "Role Selection",
-    url: "/auth/role-selection",
+    title: "Logout",
+    url: "/auth/logout",
     icon: Settings,
   },
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation();
-  const userRole = getUserRole();
+  const { user } = useUser();
+
+  const userRole = user?.role;
 
   // Choose navigation items based on user role
   const navigationItems =

@@ -97,3 +97,10 @@ export function formatDateTime(dateString: string | Date) {
     minute: "2-digit",
   });
 }
+
+export function calculateAge(dob: string | Date) {
+  const birthDate = new Date(dob);
+  const ageDiff = Date.now() - birthDate.getTime();
+  const ageDate = new Date(ageDiff);
+  return Math.abs(ageDate.getUTCFullYear() - 1970);
+}

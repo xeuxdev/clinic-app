@@ -1,19 +1,13 @@
 import { Calendar, Clock, CreditCard, Plus, Search, Users } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { useListTodaysAppointments } from "~/api/appointments";
+import { useListPatients } from "~/api/patients";
+import type { Patient } from "~/api/types";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import {
-  demoDoctors,
-  demoPatients,
-  getDoctorById,
-  getPatientById,
-  getTodaysAppointments,
-  searchPatients,
-  type Appointment,
-} from "~/lib/demo-data";
 
 export function meta() {
   return [
@@ -27,51 +21,77 @@ export function meta() {
 
 export default function AttendantDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState(demoPatients.slice(0, 5));
+  const [searchResults, setSearchResults] = useState<Patient[]>([]);
 
-  const todaysAppointments = getTodaysAppointments();
-  const totalPatients = demoPatients.length;
-  const totalDoctors = demoDoctors.length;
-  const pendingPayments = todaysAppointments.filter(
-    (a) => a.paymentStatus === "pending"
+  const { data: patients } = useListPatients();
+  // `useListPatients` returns an array of patients (or undefined while loading)
+  const patientsList: Patient[] = patients ?? [];
+
+  const { data: todaysAppointmentsData } = useListTodaysAppointments();
+  // API returns an object with `appointments` property per `TodaysAppointmentResponse`
+  const todaysAppointments = todaysAppointmentsData?.appointments ?? [];
+
+  const totalPatients = patientsList.length;
+  // derive total doctors from todays appointments (unique doctor ids) as a fallback
+  const totalDoctors = Array.from(
+    new Set(todaysAppointments.map((a) => a.doctor_id))
   ).length;
+  const pendingPayments = 0; // payment info not available on the current API Appointment shape
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    if (query.trim() === "") {
-      setSearchResults(demoPatients.slice(0, 5));
-    } else {
-      setSearchResults(searchPatients(query));
-    }
+    // results are derived in the effect below
   };
 
-  const getStatusBadge = (status: Appointment["status"]) => {
-    const styles = {
+  // populate search results from fetched patients
+  useEffect(() => {
+    if (!patientsList || patientsList.length === 0) {
+      setSearchResults([]);
+      return;
+    }
+
+    if (!searchQuery || searchQuery.trim() === "") {
+      setSearchResults(patientsList.slice(0, 5));
+      return;
+    }
+
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = patientsList.filter((p) => {
+      // patient shape from API uses full_name and phone_number
+      const name = (p.full_name ?? "").toLowerCase();
+      const phone = (p.phone_number ?? "").toLowerCase();
+      const email = (p.email ?? "").toLowerCase();
+      return name.includes(q) || phone.includes(q) || email.includes(q);
+    });
+
+    setSearchResults(filtered.slice(0, 20));
+  }, [patientsList, searchQuery]);
+
+  const getStatusBadge = (status?: string) => {
+    if (!status) return null;
+    // normalize status (API may use underscores)
+    const normalized = status.replace("_", "-");
+    const styles: Record<string, string> = {
       scheduled: "bg-blue-100 text-blue-800",
       "in-progress": "bg-yellow-100 text-yellow-800",
       completed: "bg-green-100 text-green-800",
       cancelled: "bg-red-100 text-red-800",
     };
 
-    return (
-      <Badge className={styles[status]}>
-        {status.charAt(0).toUpperCase() + status.slice(1).replace("-", " ")}
-      </Badge>
-    );
+    const label =
+      normalized.charAt(0).toUpperCase() +
+      normalized.slice(1).replace("-", " ");
+
+    return <Badge className={styles[normalized] ?? ""}>{label}</Badge>;
   };
 
-  const getPaymentBadge = (status: Appointment["paymentStatus"]) => {
-    const styles = {
-      paid: "bg-green-100 text-green-800",
-      pending: "bg-orange-100 text-orange-800",
-      partial: "bg-yellow-100 text-yellow-800",
-    };
-
-    return (
-      <Badge className={styles[status]}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
+  const calculateAge = (dob?: string | null) => {
+    if (!dob) return "—";
+    const birth = new Date(dob);
+    if (isNaN(birth.getTime())) return "—";
+    const diff = Date.now() - birth.getTime();
+    const ageDt = new Date(diff);
+    return Math.abs(ageDt.getUTCFullYear() - 1970);
   };
 
   return (
@@ -197,10 +217,12 @@ export default function AttendantDashboard() {
                     className="flex items-center justify-between flex-wrap p-3 border rounded-lg hover:bg-gray-50"
                   >
                     <div>
-                      <p className="font-medium">{patient.name}</p>
-                      <p className="text-sm text-gray-600">{patient.phone}</p>
+                      <p className="font-medium">{patient.full_name}</p>
+                      <p className="text-sm text-gray-600">
+                        {patient.phone_number}
+                      </p>
                       <p className="text-xs text-gray-500">
-                        Age: {patient.age}
+                        Age: {calculateAge(patient.date_of_birth)}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -247,25 +269,33 @@ export default function AttendantDashboard() {
           <CardContent>
             <div className="space-y-3 max-h-80 overflow-y-auto">
               {todaysAppointments.map((appointment) => {
-                const patient = getPatientById(appointment.patientId);
-                const doctor = getDoctorById(appointment.doctorId);
+                const patient =
+                  patientsList.find((p) => p.id === appointment.profile_id) ||
+                  null;
+
+                // doctor name is not available here; show doctor id as fallback
+                const doctorLabel = appointment.doctor_id
+                  ? `Dr. #${appointment.doctor_id}`
+                  : "";
+
+                const appointmentTime = appointment.appointment_date ?? "";
 
                 return (
                   <div
-                    key={appointment.id}
+                    key={appointment.appointment_id}
                     className="flex items-center justify-between p-3 border rounded-lg"
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium">{patient?.name}</p>
+                        <p className="font-medium">
+                          {patient?.full_name ?? "Unknown"}
+                        </p>
                         {getStatusBadge(appointment.status)}
                       </div>
                       <p className="text-sm text-gray-600">
-                        {doctor?.name} • {appointment.time}
+                        {appointment.doctor_name} • {appointmentTime}
                       </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getPaymentBadge(appointment.paymentStatus)}
-                      </div>
+                      {/* API appointment shape doesn't include paymentStatus; omit payment badge */}
                     </div>
                   </div>
                 );

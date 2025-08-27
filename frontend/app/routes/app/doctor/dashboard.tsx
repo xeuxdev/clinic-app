@@ -6,7 +6,7 @@ import {
   Play,
   User,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,12 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import {
-  getAppointmentsByDoctor,
-  getDoctorById,
-  getPatientById,
-  type Appointment,
-} from "~/lib/demo-data";
+import { useListTodaysAppointments } from "~/api/appointments";
+import { useUser } from "~/context/user-context";
+import type { Appointment } from "~/api/types";
 
 export function meta() {
   return [
@@ -37,53 +34,85 @@ export function meta() {
 }
 
 export default function DoctorDashboard() {
-  const [selectedDoctorId, setSelectedDoctorId] = useState("1"); // Default to first doctor
+  const { user } = useUser();
 
-  const today = new Date().toISOString().split("T")[0];
-  const doctorAppointments = getAppointmentsByDoctor(selectedDoctorId, today);
-  const selectedDoctor = getDoctorById(selectedDoctorId);
+  // Default selected doctor comes from the logged in user when available.
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(
+    () => user?.accountId ?? ""
+  );
+
+  useEffect(() => {
+    if (user?.role === "doctor" && user.accountId) {
+      setSelectedDoctorId(user.accountId);
+    }
+  }, [user]);
+
+  // Fetch today's appointments from the API. We'll filter client-side by doctor id.
+  const todaysQuery = useListTodaysAppointments();
+  const allTodaysAppointments: Appointment[] =
+    todaysQuery.data?.appointments ?? [];
+
+  const doctorAppointments = useMemo(() => {
+    if (!selectedDoctorId) return allTodaysAppointments;
+    const did = Number(selectedDoctorId);
+    return allTodaysAppointments.filter((a) => a.doctor_id === did);
+  }, [allTodaysAppointments, selectedDoctorId]);
+
+  // Selected doctor display name falls back to the user full name for doctors.
+  const selectedDoctorName =
+    user?.role === "doctor" ? user?.fullName : undefined;
 
   const getStatusBadge = (status: Appointment["status"]) => {
-    const styles = {
-      scheduled: "bg-blue-100 text-blue-800",
-      "in-progress": "bg-yellow-100 text-yellow-800",
+    const styles: Record<string, string> = {
+      booked: "bg-blue-100 text-blue-800",
+      in_progress: "bg-yellow-100 text-yellow-800",
       completed: "bg-green-100 text-green-800",
       cancelled: "bg-red-100 text-red-800",
+      rescheduled: "bg-purple-100 text-purple-800",
     };
 
+    const label = status
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
     return (
-      <Badge className={styles[status]}>
-        {status.charAt(0).toUpperCase() + status.slice(1).replace("-", " ")}
+      <Badge className={styles[status] ?? "bg-gray-100 text-gray-800"}>
+        {label}
       </Badge>
     );
   };
 
   const getNextAppointment = () => {
     const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now
-      .getMinutes()
-      .toString()
-      .padStart(2, "0")}`;
-
     return doctorAppointments
-      .filter((a) => a.status === "scheduled" && a.time >= currentTime)
-      .sort((a, b) => a.time.localeCompare(b.time))[0];
+      .filter((a) => {
+        // consider only upcoming bookings
+        const dt = new Date(a.appointment_date);
+        return (
+          (a.status === "booked" || a.status === "in_progress") && dt > now
+        );
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.appointment_date).getTime() -
+          new Date(b.appointment_date).getTime()
+      )[0];
   };
 
-  const getDashboardStats = () => {
-    return {
-      total: doctorAppointments.length,
-      scheduled: doctorAppointments.filter((a) => a.status === "scheduled")
-        .length,
-      inProgress: doctorAppointments.filter((a) => a.status === "in-progress")
-        .length,
-      completed: doctorAppointments.filter((a) => a.status === "completed")
-        .length,
-      nextAppointment: getNextAppointment(),
-    };
-  };
-
-  const stats = getDashboardStats();
+  const stats = useMemo(() => {
+    const total = doctorAppointments.length;
+    const scheduled = doctorAppointments.filter(
+      (a) => a.status === "booked"
+    ).length;
+    const inProgress = doctorAppointments.filter(
+      (a) => a.status === "in_progress"
+    ).length;
+    const completed = doctorAppointments.filter(
+      (a) => a.status === "completed"
+    ).length;
+    const nextAppointment = getNextAppointment();
+    return { total, scheduled, inProgress, completed, nextAppointment };
+  }, [doctorAppointments]);
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -92,7 +121,7 @@ export default function DoctorDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Doctor Dashboard</h1>
           <p className="text-gray-600">
-            Welcome, {selectedDoctor?.name} • {selectedDoctor?.specialization}
+            Welcome, {selectedDoctorName ?? "Doctor"}
           </p>
         </div>
       </div>
@@ -189,40 +218,48 @@ export default function DoctorDashboard() {
                   </TableHeader>
                   <TableBody>
                     {doctorAppointments
-                      .sort((a, b) => a.time.localeCompare(b.time))
+                      .slice()
+                      .sort(
+                        (a, b) =>
+                          new Date(a.appointment_date).getTime() -
+                          new Date(b.appointment_date).getTime()
+                      )
                       .map((appointment) => {
-                        const patient = getPatientById(appointment.patientId);
+                        const time = new Date(
+                          appointment.appointment_date
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
 
                         return (
                           <TableRow key={appointment.id}>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-gray-400" />
-                                <span className="font-medium">
-                                  {appointment.time}
-                                </span>
+                                <span className="font-medium">{time}</span>
                               </div>
                             </TableCell>
                             <TableCell>
                               <div>
-                                <p className="font-medium">{patient?.name}</p>
-                                {patient?.medicalHistory && (
+                                <p className="font-medium">
+                                  {appointment.patient_name}
+                                </p>
+                                {appointment.note && (
                                   <p className="text-xs text-gray-500">
-                                    History: {patient.medicalHistory}
+                                    Note: {appointment.note}
                                   </p>
                                 )}
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">
-                                {patient?.age} years
-                              </Badge>
+                              <Badge variant="outline">N/A</Badge>
                             </TableCell>
                             <TableCell>
                               <div className="text-sm">
-                                <p>{patient?.phone}</p>
+                                <p>{appointment.patient_phone}</p>
                                 <p className="text-gray-500">
-                                  {patient?.email}
+                                  {appointment.patient_email}
                                 </p>
                               </div>
                             </TableCell>
@@ -231,7 +268,7 @@ export default function DoctorDashboard() {
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
-                                {appointment.status === "scheduled" && (
+                                {appointment.status === "booked" && (
                                   <Link
                                     to={`/doctor/consultation/${appointment.id}`}
                                   >
@@ -242,7 +279,7 @@ export default function DoctorDashboard() {
                                   </Link>
                                 )}
 
-                                {appointment.status === "in-progress" && (
+                                {appointment.status === "in_progress" && (
                                   <Link
                                     to={`/doctor/consultation/${appointment.id}`}
                                   >
@@ -284,27 +321,33 @@ export default function DoctorDashboard() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Next Appointment */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Next Appointment</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {stats.nextAppointment ? (
+          {/* Next Appointment (only shown when there is an upcoming appointment) */}
+          {stats.nextAppointment && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Next Appointment</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="space-y-3">
                   <div className="p-3 bg-blue-50 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <Clock className="w-4 h-4 text-blue-600" />
                       <span className="font-medium text-blue-900">
-                        {stats.nextAppointment.time}
+                        {new Date(
+                          stats.nextAppointment.appointment_date
+                        ).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
                     </div>
                     <p className="font-medium">
-                      {getPatientById(stats.nextAppointment.patientId)?.name}
+                      {stats.nextAppointment.patient_name}
                     </p>
                     <p className="text-sm text-gray-600">
-                      Age:{" "}
-                      {getPatientById(stats.nextAppointment.patientId)?.age}
+                      Contact:{" "}
+                      {stats.nextAppointment.patient_phone ??
+                        stats.nextAppointment.patient_email}
                     </p>
                   </div>
 
@@ -315,14 +358,9 @@ export default function DoctorDashboard() {
                     </Button>
                   </Link>
                 </div>
-              ) : (
-                <div className="text-center py-4 text-gray-500">
-                  <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
-                  <p>All done for today!</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Quick Stats */}
           <Card>

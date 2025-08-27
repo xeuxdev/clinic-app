@@ -1,16 +1,16 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
+import { useUser } from "~/context/user-context";
 import { API_ENDPOINTS } from "~/lib/api-endpoints";
-import { postRequest, putRequest } from "~/lib/http";
+import { postRequest } from "~/lib/http";
 import { displayErrorMessage, showSuccessToast } from "~/lib/utils";
 import type {
-  RegisterPayload,
-  RegisterResponse,
   LoginPayload,
   LoginResponse,
+  RegisterPatientPayload,
+  RegisterResponse,
+  RegisterUserPayload,
 } from "./types";
-
-// Types for request payloads
 
 export interface PatientRegisterPayload {
   name: string;
@@ -34,9 +34,9 @@ export function useSignUp() {
   const navigate = useNavigate();
 
   return useMutation({
-    mutationFn: async (payload: RegisterPayload) => {
-      return postRequest<RegisterResponse, RegisterPayload>({
-        url: API_ENDPOINTS.AUTH.REGISTER,
+    mutationFn: async (payload: RegisterUserPayload) => {
+      return postRequest<RegisterResponse, RegisterUserPayload>({
+        url: API_ENDPOINTS.AUTH.REGISTER_USER,
         payload,
       });
     },
@@ -44,7 +44,6 @@ export function useSignUp() {
       console.log("User registration successful:", data);
       showSuccessToast("Registration successful!", "Welcome to the platform");
 
-      queryClient.invalidateQueries({ queryKey: ["user"] });
       navigate("/auth/login");
     },
     onError: (error) => {
@@ -57,20 +56,17 @@ export function useSignUp() {
 export function usePatientRegister() {
   const queryClient = useQueryClient();
 
-  return useMutation<any, Error, PatientRegisterPayload>({
-    mutationFn: async (payload) => {
-      return postRequest({
-        url: API_ENDPOINTS.AUTH.PATIENT_REGISTER,
+  return useMutation({
+    mutationFn: async (payload: RegisterPatientPayload) => {
+      return postRequest<RegisterResponse, RegisterPatientPayload>({
+        url: API_ENDPOINTS.AUTH.REGISTER_PATIENT,
         payload,
       });
     },
     onSuccess: (data) => {
       console.log("Patient registration successful:", data);
-      showSuccessToast(
-        "Patient registration successful!",
-        "Welcome to the healthcare platform"
-      );
-      queryClient.invalidateQueries({ queryKey: ["user"] });
+      showSuccessToast("Patient registration successful!");
+      queryClient.invalidateQueries({ queryKey: ["patients"] });
     },
     onError: (error) => {
       console.error("Patient registration failed:", error);
@@ -80,8 +76,8 @@ export function usePatientRegister() {
 }
 
 export function useLogin() {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { setUser } = useUser();
 
   return useMutation({
     mutationFn: async (payload: LoginPayload) => {
@@ -90,58 +86,25 @@ export function useLogin() {
         payload,
       });
     },
-    onSuccess: (data) => {
-      console.log("Login successful:", data);
+    onSuccess: ({ user }) => {
       showSuccessToast("Login successful!", "Welcome back");
-      queryClient.invalidateQueries({ queryKey: ["user"] });
-      navigate("/");
+
+      setUser({
+        userId: user.id,
+        accountId: user.account_id,
+        fullName: user.full_name,
+        phoneNumber: user.phone_number,
+        role: user.role,
+      });
+
+      if (user.role === "doctor") {
+        navigate("/doctor");
+      } else {
+        navigate("/");
+      }
     },
     onError: (error) => {
       console.error("Login failed:", error);
-      displayErrorMessage(error);
-    },
-  });
-}
-
-export function useChangePassword() {
-  return useMutation<any, Error, ChangePasswordPayload>({
-    mutationFn: async (payload) => {
-      return putRequest({
-        url: API_ENDPOINTS.AUTH.CHANGE_PASSWORD,
-        payload,
-      });
-    },
-    onSuccess: (data) => {
-      console.log("Password changed successfully:", data);
-      showSuccessToast(
-        "Password changed successfully!",
-        "Your password has been updated"
-      );
-    },
-    onError: (error) => {
-      console.error("Password change failed:", error);
-      displayErrorMessage(error);
-    },
-  });
-}
-
-export function useRequestPasswordReset() {
-  return useMutation<any, Error, RequestPasswordResetPayload>({
-    mutationFn: async (payload) => {
-      return postRequest({
-        url: API_ENDPOINTS.AUTH.REQUEST_PASSWORD_RESET,
-        payload,
-      });
-    },
-    onSuccess: (data) => {
-      console.log("Password reset request successful:", data);
-      showSuccessToast(
-        "Password reset email sent!",
-        "Check your email for reset instructions"
-      );
-    },
-    onError: (error) => {
-      console.error("Password reset request failed:", error);
       displayErrorMessage(error);
     },
   });

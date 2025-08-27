@@ -6,25 +6,22 @@ import {
   showErrorToast,
   displayErrorMessage,
 } from "~/lib/utils";
-
-// Types for request payloads
-export interface AddAppointmentPayload {
-  patientId: string;
-  doctorId: string;
-  date: string; // ISO date string
-}
-
-export interface RescheduleAppointmentPayload {
-  newDate: string; // ISO date string
-}
+import type {
+  AddAppointmentPayload,
+  AddAppointmentResponse,
+  AppointmentResponse,
+  AppointmentsListResponse,
+  RescheduleAppointmentPayload,
+  TodaysAppointmentResponse,
+} from "./types";
 
 // Appointments hooks
 export function useAddAppointment() {
   const queryClient = useQueryClient();
 
-  return useMutation<any, Error, AddAppointmentPayload>({
-    mutationFn: async (payload) => {
-      return postRequest({
+  return useMutation({
+    mutationFn: async (payload: AddAppointmentPayload) => {
+      return postRequest<AddAppointmentResponse, AddAppointmentPayload>({
         url: API_ENDPOINTS.APPOINTMENTS.ADD,
         payload,
       });
@@ -45,13 +42,48 @@ export function useAddAppointment() {
 }
 
 export function useListAppointments() {
-  return useQuery<any, Error>({
+  return useQuery({
     queryKey: ["appointments"],
     queryFn: async () => {
-      return getRequest({
+      return getRequest<AppointmentsListResponse>({
         url: API_ENDPOINTS.APPOINTMENTS.LIST,
       });
     },
+  });
+}
+
+export function useGetAppointmentById(appointmentId: string | number) {
+  return useQuery({
+    queryKey: ["appointment", appointmentId],
+    queryFn: async () => {
+      return getRequest<AppointmentResponse>({
+        url: API_ENDPOINTS.APPOINTMENTS.GET_BY_ID(appointmentId),
+      });
+    },
+    enabled: !!appointmentId,
+  });
+}
+
+export function useListTodaysAppointments() {
+  return useQuery({
+    queryKey: ["todays-appointments"],
+    queryFn: async () => {
+      return getRequest<TodaysAppointmentResponse>({
+        url: API_ENDPOINTS.APPOINTMENTS.TODAY,
+      });
+    },
+  });
+}
+
+export function useSearchAppointments(query: string) {
+  return useQuery({
+    queryKey: ["search-appointments", query],
+    queryFn: async () => {
+      return getRequest<AppointmentsListResponse>({
+        url: API_ENDPOINTS.APPOINTMENTS.SEARCH(query),
+      });
+    },
+    enabled: !!query,
   });
 }
 
@@ -86,13 +118,15 @@ export function useStartAppointment() {
 export function useRescheduleAppointment() {
   const queryClient = useQueryClient();
 
-  return useMutation<
-    any,
-    Error,
-    { appointmentId: string | number; payload: RescheduleAppointmentPayload }
-  >({
-    mutationFn: async ({ appointmentId, payload }) => {
-      return putRequest({
+  return useMutation({
+    mutationFn: async ({
+      appointmentId,
+      payload,
+    }: {
+      appointmentId: string | number;
+      payload: RescheduleAppointmentPayload;
+    }) => {
+      return putRequest<AppointmentResponse, RescheduleAppointmentPayload>({
         url: API_ENDPOINTS.APPOINTMENTS.RESCHEDULE(appointmentId),
         payload,
       });
@@ -118,8 +152,8 @@ export function useRescheduleAppointment() {
 export function useCancelAppointment() {
   const queryClient = useQueryClient();
 
-  return useMutation<any, Error, string | number>({
-    mutationFn: async (appointmentId) => {
+  return useMutation({
+    mutationFn: async (appointmentId: string | number) => {
       return deleteRequest({
         url: API_ENDPOINTS.APPOINTMENTS.CANCEL(appointmentId),
       });
@@ -145,8 +179,8 @@ export function useCancelAppointment() {
 export function useCompleteAppointment() {
   const queryClient = useQueryClient();
 
-  return useMutation<any, Error, string | number>({
-    mutationFn: async (appointmentId) => {
+  return useMutation({
+    mutationFn: async (appointmentId: string | number) => {
       return putRequest({
         url: API_ENDPOINTS.APPOINTMENTS.COMPLETE(appointmentId),
         payload: {},

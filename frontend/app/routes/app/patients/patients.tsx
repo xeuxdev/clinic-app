@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Search, Plus, Phone, Mail, MapPin, Calendar } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -13,12 +13,21 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import {
-  demoPatients,
-  searchPatients,
-  getAppointmentsByPatient,
-  type Patient,
-} from "~/lib/demo-data";
+import { useListAppointments } from "~/api/appointments";
+import { useListPatients, useSearchPatients } from "~/api/patients";
+import type { Patient as ApiPatient } from "~/api/types";
+
+// Local UI patient shape (replaces demo-data Patient)
+type UIPatient = {
+  id: string;
+  name: string;
+  phone: string;
+  age: number;
+  address: string;
+  medicalHistory?: string;
+  email: string;
+  registrationDate: string;
+};
 
 export function meta() {
   return [
@@ -29,19 +38,68 @@ export function meta() {
 
 export default function PatientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredPatients, setFilteredPatients] = useState(demoPatients);
+  const [filteredPatients, setFilteredPatients] = useState<UIPatient[]>([]);
+
+  // React Query hooks
+  const listQuery = useListPatients();
+  const searchQueryHook = useSearchPatients(searchQuery);
+  const appointmentsQuery = useListAppointments();
+
+  // Map an API Patient to the demo UI Patient shape
+  const mapApiPatient = (p: ApiPatient): UIPatient => ({
+    id: String(p.id),
+    name: p.full_name,
+    phone: p.phone_number,
+    age: p.date_of_birth
+      ? Math.max(
+          0,
+          new Date().getFullYear() - new Date(p.date_of_birth).getFullYear()
+        )
+      : 0,
+    address: "",
+    email: p.email ?? "",
+    registrationDate: p.created_at ?? new Date().toISOString(),
+    medicalHistory: p.medical_condition ?? undefined,
+  });
+
+  // derive patients list from API (fallback to demo data if API empty)
+  const apiPatients = useMemo(() => {
+    const fromList = listQuery.data ?? [];
+    const fromSearch = searchQueryHook.data ?? [];
+    const source =
+      searchQuery && searchQuery.trim() !== "" ? fromSearch : fromList;
+    if (!source || source.length === 0) return [] as UIPatient[];
+    return source.map(mapApiPatient);
+  }, [listQuery.data, searchQueryHook.data, searchQuery]);
+
+  // update filteredPatients when API data changes
+  useMemo(() => {
+    if (listQuery.isLoading || (searchQuery && searchQueryHook.isLoading))
+      return;
+    setFilteredPatients(apiPatients);
+  }, [apiPatients, listQuery.isLoading, searchQueryHook.isLoading]);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    if (query.trim() === "") {
-      setFilteredPatients(demoPatients);
-    } else {
-      setFilteredPatients(searchPatients(query));
-    }
+    // search is handled by the useSearchPatients hook; filteredPatients will update via effect
   };
 
   const getPatientAppointmentCount = (patientId: string) => {
-    return getAppointmentsByPatient(patientId).length;
+    const appts = appointmentsQuery.data ?? [];
+    const list: any[] = Array.isArray(appts)
+      ? appts
+      : appts?.bookings ?? appts?.data ?? [];
+    const idNum = Number(patientId);
+    return list.filter((a) => {
+      return (
+        a.patientId === patientId ||
+        a.patientId === idNum ||
+        a.profile_id === idNum ||
+        a.patient_id === idNum ||
+        a.patient === patientId ||
+        a.patient === idNum
+      );
+    }).length;
   };
 
   return (
@@ -70,7 +128,7 @@ export default function PatientsPage() {
           <CardContent className="p-6">
             <div className="text-center">
               <p className="text-2xl font-bold text-blue-600">
-                {demoPatients.length}
+                {listQuery.isLoading ? 0 : listQuery.data?.length ?? 0}
               </p>
               <p className="text-sm text-gray-600">Total Patients</p>
             </div>
@@ -82,7 +140,7 @@ export default function PatientsPage() {
             <div className="text-center">
               <p className="text-2xl font-bold text-green-600">
                 {
-                  demoPatients.filter((p) => {
+                  apiPatients.filter((p) => {
                     const today = new Date();
                     const regDate = new Date(p.registrationDate);
                     const diffTime = Math.abs(
@@ -192,9 +250,6 @@ export default function PatientsPage() {
                             Book Appointment
                           </Button>
                         </Link>
-                        <Button size="sm" variant="ghost">
-                          View Details
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

@@ -63,7 +63,10 @@ export const userLogin = [
       res.status(200).json({
         success: true,
         message: "User logged in",
-        user: loggedInUser.rows[0],
+        user: {
+          ...loggedInUser.rows[0],
+          role: userResult.rows[0].role,
+        },
       });
     } catch (error) {
       console.error("Error trying to login user:", error.message);
@@ -100,6 +103,11 @@ export const patientRegister = [
     .withMessage("Full name is required")
     .trim()
     .escape(),
+
+  body("role")
+    .optional()
+    .equals("patient")
+    .withMessage("Invalid role provided"),
 
   body("date_of_birth")
     .notEmpty()
@@ -151,6 +159,7 @@ export const patientRegister = [
       medical_condition,
       current_medication,
       known_allergies,
+      role: incomingRole,
     } = req.body;
 
     try {
@@ -171,11 +180,17 @@ export const patientRegister = [
       const verification_code = generateOTP(6);
       const verification_code_expiry = new Date(Date.now() + 15 * 60 * 1000);
 
-      // Create account
+      const roleToUse = incomingRole || "patient";
       const newAccount = await pool.query(
-        `INSERT INTO auth.accounts (email, password, verification_code, verification_code_expiry)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [email, hashedPassword, verification_code, verification_code_expiry]
+        `INSERT INTO auth.accounts (email, password, role, verification_code, verification_code_expiry)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [
+          email,
+          hashedPassword,
+          roleToUse,
+          verification_code,
+          verification_code_expiry,
+        ]
       );
 
       // Create profile
@@ -195,11 +210,12 @@ export const patientRegister = [
           known_allergies || null,
         ]
       );
-      setSession(newProfile.rows[0].id);
-      await sendEmail(
-        newAccount.rows[0].email,
-        emailTemplates.welcome(newProfile.rows[0].full_name)
-      );
+      // setSession(newProfile.rows[0].id);
+      // await sendEmail(
+      //   newAccount.rows[0].email,
+      //   emailTemplates.welcome(newProfile.rows[0].full_name)
+      // );
+
       res.status(201).json({
         success: true,
         message: "Account created",
@@ -214,139 +230,140 @@ export const patientRegister = [
     }
   },
 ];
-export const requestPasswordResetLink = [
-  body("email").isEmail().withMessage("Invalid email format").normalizeEmail(),
+// export const requestPasswordResetLink = [
+//   body("email").isEmail().withMessage("Invalid email format").normalizeEmail(),
 
-  async (req, res) => {
-    const error = validationResult(req);
-    if (!error.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: error.array()[0].msg,
-      });
-    }
+//   async (req, res) => {
+//     const error = validationResult(req);
+//     if (!error.isEmpty()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: error.array()[0].msg,
+//       });
+//     }
 
-    const { email } = req.body;
+//     const { email } = req.body;
 
-    try {
-      // Check if user exists
-      const user = await pool.query(
-        `SELECT * FROM auth.accounts WHERE email = $1`,
-        [email]
-      );
+//     try {
+//       // Check if user exists
+//       const user = await pool.query(
+//         `SELECT * FROM auth.accounts WHERE email = $1`,
+//         [email]
+//       );
 
-      if (user.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "No user with this email",
-        });
-      }
+//       if (user.rowCount === 0) {
+//         return res.status(404).json({
+//           success: false,
+//           message: "No user with this email",
+//         });
+//       }
 
-      // Generate token and expiry
-      const reset_password_token = generateRandomToken();
-      const reset_password_token_expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+//       // Generate token and expiry
+//       const reset_password_token = generateRandomToken();
+//       const reset_password_token_expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-      // Update token in DB
-      await pool.query(
-        `UPDATE auth.accounts
-         SET reset_password_token = $1, reset_password_token_expiry = $2
-         WHERE email = $3`,
-        [reset_password_token, reset_password_token_expiry, email]
-      );
+//       // Update token in DB
+//       await pool.query(
+//         `UPDATE auth.accounts
+//          SET reset_password_token = $1, reset_password_token_expiry = $2
+//          WHERE email = $3`,
+//         [reset_password_token, reset_password_token_expiry, email]
+//       );
 
-      // Send reset link via email
-      const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${reset_password_token}`;
-      await sendEmail(
-        email,
-        emailTemplates.requestPassword(user.rows[0].full_name, resetLink)
-      );
+//       // Send reset link via email
+//       const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${reset_password_token}`;
+//       await sendEmail(
+//         email,
+//         emailTemplates.requestPassword(user.rows[0].full_name, resetLink)
+//       );
 
-      return res.status(200).json({
-        success: true,
-        message: "Password reset link sent to your email",
-      });
-    } catch (error) {
-      console.error("Password reset error:", error.message);
-      return res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-];
-export const changePassword = [
-  param("reset_password_token").isString(),
-  body("new_password")
-    .isLength({ min: 8 })
-    .withMessage("Password must be at least 8 characters"),
+//       return res.status(200).json({
+//         success: true,
+//         message: "Password reset link sent to your email",
+//       });
+//     } catch (error) {
+//       console.error("Password reset error:", error.message);
+//       return res.status(500).json({
+//         success: false,
+//         message: "Internal server error",
+//       });
+//     }
+//   },
+// ];
 
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: errors.array()[0].msg,
-      });
-    }
+// export const changePassword = [
+//   param("reset_password_token").isString(),
+//   body("new_password")
+//     .isLength({ min: 8 })
+//     .withMessage("Password must be at least 8 characters"),
 
-    const { reset_password_token } = req.params;
-    const { new_password } = req.body;
+//   async (req, res) => {
+//     const errors = validationResult(req);
+//     if (!errors.isEmpty()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: errors.array()[0].msg,
+//       });
+//     }
 
-    try {
-      // Find account with token
-      const accountResult = await pool.query(
-        `SELECT * FROM auth.accounts WHERE reset_password_token=$1`,
-        [reset_password_token]
-      );
+//     const { reset_password_token } = req.params;
+//     const { new_password } = req.body;
 
-      if (
-        accountResult.rowCount === 0 ||
-        new Date(accountResult.rows[0].reset_password_token_expiry) < new Date()
-      ) {
-        return res.status(404).json({
-          success: false,
-          message: "Invalid or expired token",
-        });
-      }
+//     try {
+//       // Find account with token
+//       const accountResult = await pool.query(
+//         `SELECT * FROM auth.accounts WHERE reset_password_token=$1`,
+//         [reset_password_token]
+//       );
 
-      const account = accountResult.rows[0];
+//       if (
+//         accountResult.rowCount === 0 ||
+//         new Date(accountResult.rows[0].reset_password_token_expiry) < new Date()
+//       ) {
+//         return res.status(404).json({
+//           success: false,
+//           message: "Invalid or expired token",
+//         });
+//       }
 
-      // Hash new password
-      const hashedPassword = await bcrypt.hash(new_password, 10);
+//       const account = accountResult.rows[0];
 
-      // Update account and clear token
-      await pool.query(
-        `UPDATE auth.accounts
-         SET password=$1, reset_password_token=NULL, reset_password_token_expiry=NULL
-         WHERE id=$2`,
-        [hashedPassword, account.id]
-      );
+//       // Hash new password
+//       const hashedPassword = await bcrypt.hash(new_password, 10);
 
-      // Get profile
-      const profileResult = await pool.query(
-        `SELECT * FROM "user".profile WHERE account_id=$1`,
-        [account.id]
-      );
+//       // Update account and clear token
+//       await pool.query(
+//         `UPDATE auth.accounts
+//          SET password=$1, reset_password_token=NULL, reset_password_token_expiry=NULL
+//          WHERE id=$2`,
+//         [hashedPassword, account.id]
+//       );
 
-      // Send success email
-      await sendEmail(
-        account.email,
-        emailTemplates.resetSuccess(profileResult.rows[0].full_name)
-      );
+//       // Get profile
+//       const profileResult = await pool.query(
+//         `SELECT * FROM "user".profile WHERE account_id=$1`,
+//         [account.id]
+//       );
 
-      res.status(200).json({
-        success: true,
-        message: "Password reset successful",
-      });
-    } catch (error) {
-      console.error("Password change error:", error.message);
-      return res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-  },
-];
+//       // Send success email
+//       await sendEmail(
+//         account.email,
+//         emailTemplates.resetSuccess(profileResult.rows[0].full_name)
+//       );
+
+//       res.status(200).json({
+//         success: true,
+//         message: "Password reset successful",
+//       });
+//     } catch (error) {
+//       console.error("Password change error:", error.message);
+//       return res.status(500).json({
+//         success: false,
+//         message: "Internal server error",
+//       });
+//     }
+//   },
+// ];
 
 export const userRegister = [
   body("email")
@@ -374,6 +391,11 @@ export const userRegister = [
     .trim()
     .escape(),
 
+  body("role")
+    .optional()
+    .isIn(["doctor", "attendant"])
+    .withMessage("Invalid role provided"),
+
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -383,17 +405,24 @@ export const userRegister = [
       });
     }
 
-    const { email, password, phone_number, full_name } = req.body;
+    const {
+      email,
+      password,
+      phone_number,
+      full_name,
+      role: incomingRole,
+    } = req.body;
 
     try {
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Insert account with role 'receptionist'
+      const roleToUse = incomingRole;
+
       const newAccount = await pool.query(
         `INSERT INTO auth.accounts (email, password, role)
          VALUES ($1, $2, $3) RETURNING *`,
-        [email, hashedPassword, "receptionist"]
+        [email, hashedPassword, roleToUse]
       );
 
       // Insert profile

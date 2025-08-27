@@ -9,8 +9,9 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
-import ReactQueryProvider from "./provider/query-provider";
 import { Toaster } from "./components/ui/sonner";
+import { UserProvider } from "./context/user-context";
+import ReactQueryProvider from "./provider/query-provider";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -36,7 +37,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body className="antialiased font-sans">
         <ReactQueryProvider>
-          {children}
+          <UserProvider>{children}</UserProvider>
           <Toaster richColors />
         </ReactQueryProvider>
         <ScrollRestoration />

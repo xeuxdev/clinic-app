@@ -14,7 +14,7 @@ import {
   FormMessage,
 } from "~/components/ui/form";
 import { Icons } from "~/components/ui/icons";
-import { Input } from "~/components/ui/input";
+import { Input, PasswordInput } from "~/components/ui/input";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -97,8 +97,7 @@ export default function LoginPage() {
                     <FormLabel required>Password</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Input
-                          type="password"
+                        <PasswordInput
                           placeholder="• • • • • • • •"
                           className="pl-10 border-border bg-white"
                           {...field}
@@ -110,15 +109,6 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
-
-              <div className="flex justify-end">
-                <Link
-                  to="/auth/forgot-password"
-                  className="text-sm text-primary hover:underline"
-                >
-                  Forgot Password?
-                </Link>
-              </div>
 
               <Button
                 type="submit"

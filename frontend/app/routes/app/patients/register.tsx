@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
-import { toast } from "sonner";
 import { z } from "zod";
+import { usePatientRegister } from "~/api/auth";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
@@ -46,15 +46,21 @@ const patientSchema = z.object({
     .string()
     .min(1, "Email is required")
     .email("Please enter a valid email address"),
-  age: z
+  dateOfBirth: z
     .string()
-    .min(1, "Age is required")
+    .min(1, "Date of Birth is required")
     .refine((val) => {
-      const num = Number(val);
-      return !isNaN(num) && num >= 1 && num <= 120;
-    }, "Age must be between 1 and 120"),
+      const date = new Date(val);
+      return !isNaN(date.getTime());
+    }, "Please enter a valid date"),
   address: z.string().min(1, "Address is required"),
   medicalHistory: z.string().optional(),
+  bloodGroup: z.enum(
+    ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const,
+    {
+      message: "Blood group is required",
+    }
+  ),
 });
 
 type PatientFormData = z.infer<typeof patientSchema>;
@@ -62,40 +68,39 @@ type PatientFormData = z.infer<typeof patientSchema>;
 export default function RegisterPatient() {
   const navigate = useNavigate();
 
+  const { mutateAsync } = usePatientRegister();
+
   const form = useForm<PatientFormData>({
     resolver: zodResolver(patientSchema),
     defaultValues: {
       name: "",
       phone: "",
       email: "",
-      age: "",
+      dateOfBirth: "",
       address: "",
       medicalHistory: "",
+      bloodGroup: "O+",
     },
   });
 
-  const onSubmit = async (data: PatientFormData) => {
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+  const handleRegisterPatient = async (data: PatientFormData) => {
+    const generateTempPassword = () =>
+      Math.random().toString(36).slice(-8) + "A1!";
 
-      // In a real app, this would make an API call to save the patient
-      const newPatient = {
-        id: Date.now().toString(),
-        ...data,
-        age: Number(data.age),
-        registrationDate: new Date().toISOString().split("T")[0],
-      };
+    const payload = {
+      full_name: data.name,
+      email: data.email,
+      password: generateTempPassword(),
+      phone_number: data.phone,
+      date_of_birth: data.dateOfBirth,
+      blood_group: data.bloodGroup,
+      medical_condition: data.medicalHistory || undefined,
+      role: "patient" as const,
+    };
 
-      toast.success(`Patient ${data.name} registered successfully!`);
-
-      // Navigate back to patients list
-      setTimeout(() => {
-        navigate("/patients");
-      }, 1000);
-    } catch (error) {
-      toast.error("Failed to register patient. Please try again.");
-    }
+    await mutateAsync(payload).then(() => {
+      navigate("/patients");
+    });
   };
 
   return (
@@ -117,7 +122,7 @@ export default function RegisterPatient() {
 
       <div className="">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(handleRegisterPatient)}>
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -151,18 +156,16 @@ export default function RegisterPatient() {
 
                   <FormField
                     control={form.control}
-                    name="age"
+                    name="dateOfBirth"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel required>Age</FormLabel>
+                        <FormLabel required>Date of Birth</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <Input
-                              type="number"
-                              placeholder="Enter age"
-                              min="1"
-                              max="120"
-                              className="pl-10"
+                              type="date"
+                              placeholder="Select date of birth"
+                              className="pl-10 w-full"
                               {...field}
                             />
                             <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />

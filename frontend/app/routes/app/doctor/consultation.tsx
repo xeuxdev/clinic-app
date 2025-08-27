@@ -19,12 +19,10 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { Badge } from "~/components/ui/badge";
 import { Separator } from "~/components/ui/separator";
-import {
-  getAppointmentWithDetails,
-  getConsultationByAppointmentId,
-  type Consultation,
-} from "~/lib/demo-data";
+import { useGetAppointmentById } from "~/api/appointments";
+import type { Appointment } from "~/api/types";
 import { toast } from "sonner";
+import { calculateAge, formatDate } from "~/lib/utils";
 
 export function meta() {
   return [
@@ -61,28 +59,30 @@ export default function PatientConsultation() {
     currentPrescription: "",
   });
 
-  const appointmentDetails = getAppointmentWithDetails(id!);
-  const existingConsultation = getConsultationByAppointmentId(id!);
+  // Fetch appointment from API
+  const appointmentQuery = useGetAppointmentById(id!);
+  const apiAppointment: Appointment | undefined =
+    appointmentQuery.data?.appointment;
 
   useEffect(() => {
-    if (existingConsultation) {
-      setConsultationStatus(existingConsultation.status);
-      setFormData({
-        notes: existingConsultation.notes,
-        prescriptions: existingConsultation.prescriptions,
-        recommendations: existingConsultation.recommendations,
-        currentPrescription: "",
-      });
-      if (existingConsultation.startTime) {
-        setStartTime(existingConsultation.startTime);
-      }
-      if (existingConsultation.endTime) {
-        setEndTime(existingConsultation.endTime);
-      }
-    }
-  }, [existingConsultation]);
+    if (!apiAppointment) return;
+    // derive consultation status from appointment status
+    if (apiAppointment.status === "in_progress")
+      setConsultationStatus("in-progress");
+    else if (apiAppointment.status === "completed")
+      setConsultationStatus("completed");
+    else setConsultationStatus("not-started");
+  }, [apiAppointment]);
 
-  if (!appointmentDetails) {
+  if (appointmentQuery.isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <div className="text-center text-gray-600">Loading appointment...</div>
+      </div>
+    );
+  }
+
+  if (!apiAppointment) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
@@ -99,7 +99,20 @@ export default function PatientConsultation() {
     );
   }
 
-  const { appointment, patient, doctor } = appointmentDetails;
+  // Map API appointment to local shapes used by the UI
+  const appointment = apiAppointment;
+  const apptDate = new Date(appointment.appointment_date);
+  const patient = {
+    name: appointment.patient_name,
+    age: calculateAge(appointment.patient_dob),
+    phone: appointment.patient_phone,
+    email: appointment.patient_email,
+    address: "N/A",
+    medicalHistory: undefined,
+  } as const;
+  const doctor = {
+    name: appointment.doctor_name ?? "Doctor",
+  };
 
   const handleStartConsultation = () => {
     const now = new Date();
@@ -211,8 +224,11 @@ export default function PatientConsultation() {
             Patient Consultation
           </h1>
           <p className="text-gray-600">
-            {appointment.time} •{" "}
-            {new Date(appointment.date).toLocaleDateString()}
+            {apptDate.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}{" "}
+            • {apptDate.toLocaleDateString()}
           </p>
         </div>
         <div className="flex items-center gap-3">

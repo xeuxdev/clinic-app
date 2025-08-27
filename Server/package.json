@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "server": "nodemon server.js",
-    "db_setup": "node db/db_setup"
+    "db_setup": "node db/db_setup",
+    "seed": "node db/seed.js"
   },
   "type": "module",
   "dependencies": {
