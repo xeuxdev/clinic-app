@@ -20,6 +20,8 @@ export const setSession = (res, userId) => {
     domain: new URL(process.env.FRONTEND_URL).hostname,
   };
 
+  console.log(cookieOptions);
+
   res.cookie(cookieName, token, cookieOptions);
 
   return token;
