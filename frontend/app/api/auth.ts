@@ -38,8 +38,6 @@ export function useSignUp() {
 }
 
 export function usePatientRegister() {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (payload: RegisterPatientPayload) => {
       return postRequest<RegisterResponse, RegisterPatientPayload>({
@@ -50,7 +48,6 @@ export function usePatientRegister() {
     onSuccess: (data) => {
       console.log("Patient registration successful:", data);
       showSuccessToast("Patient registration successful!");
-      queryClient.invalidateQueries({ queryKey: ["patients"] });
     },
     onError: (error) => {
       console.error("Patient registration failed:", error);
@@ -74,8 +71,8 @@ export function useLogin() {
       showSuccessToast("Login successful!", "Welcome back");
 
       setUser({
-        userId: user.id,
-        accountId: user.account_id,
+        userId: Number(user.id),
+        accountId: Number(user.account_id),
         fullName: user.full_name,
         phoneNumber: user.phone_number,
         role: user.role,

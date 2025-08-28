@@ -126,6 +126,7 @@ export interface Appointment {
   doctor_name: string;
   doctor_email: string;
   status: "booked" | "in_progress" | "cancelled" | "completed" | "rescheduled";
+  paymentstatus: "paid" | "pending";
 }
 
 export interface AppointmentResponse extends ApiResponse {
@@ -133,9 +134,6 @@ export interface AppointmentResponse extends ApiResponse {
 }
 
 export interface AppointmentsListResponse extends ApiResponse {
-  bookings: Appointment[];
-}
-export interface TodaysAppointmentResponse extends ApiResponse {
   appointments: Appointment[];
 }
 
@@ -172,6 +170,17 @@ export interface Patient {
 export type GetPatientsResponse = {
   success: boolean;
   patients: Patient[];
+};
+
+export type GetConsultationNotesResponse = {
+  success: boolean;
+  consultation: {
+    id: number;
+    appointment_id: number;
+    notes: string;
+    prescriptions: string;
+    recommendations: string;
+  };
 };
 
 export type SearchPatientResponse = {

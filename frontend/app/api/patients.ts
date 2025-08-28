@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { API_ENDPOINTS } from "~/lib/api-endpoints";
 import { getRequest } from "~/lib/http";
 import type {
+  GetConsultationNotesResponse,
   GetPatientsResponse,
   Patient,
   SearchPatientResponse,
@@ -33,5 +34,18 @@ export function useSearchPatients(query?: string) {
       return res?.results ?? [];
     },
     enabled: Boolean(query && query.trim() !== ""),
+  });
+}
+
+export function useViewPatientsNotes(patientId: string | number) {
+  return useQuery({
+    queryKey: ["patients", "notes", patientId],
+    queryFn: async () => {
+      const res = await getRequest<GetConsultationNotesResponse>({
+        url: API_ENDPOINTS.PATIENTS.CONSULTATION_NOTES(patientId),
+      });
+      return res?.consultation ?? [];
+    },
+    enabled: !!patientId,
   });
 }

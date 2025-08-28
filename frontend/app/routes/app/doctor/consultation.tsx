@@ -1,3 +1,4 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   AlertCircle,
   ArrowLeft,
@@ -5,39 +6,35 @@ import {
   FileText,
   Pill,
   Play,
-  Save,
   User,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useForm } from "react-hook-form";
+import { Link, useParams } from "react-router";
+import { z } from "zod";
 import {
-  useGetAppointmentById,
-  useStartAppointment,
   useCompleteAppointment,
+  useGetAppointmentById,
   useSaveConsultation,
+  useStartAppointment,
 } from "~/api/appointments";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
-import { Label } from "~/components/ui/label";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Form,
-  FormItem,
-  FormLabel,
   FormControl,
   FormField,
+  FormItem,
+  FormLabel,
   FormMessage,
 } from "~/components/ui/form";
+import { Input } from "~/components/ui/input";
+import { Textarea } from "~/components/ui/textarea";
 import {
   calculateAge,
   formatDate,
   formatTime,
-  showSuccessToast,
   showErrorToast,
 } from "~/lib/utils";
 
@@ -71,12 +68,14 @@ export default function PatientConsultation() {
   const { mutateAsync: saveConsultation, isPending: isSaving } =
     useSaveConsultation();
 
+  const [status, setStatus] = useState<
+    "booked" | "in_progress" | "completed" | "cancelled" | "rescheduled"
+  >("booked");
+
+  const [hasLeftNotes, setHasLeftNotes] = useState(false);
+
   // Fetch appointment from API
-  const {
-    data: appointmentInfo,
-    isLoading,
-    refetch,
-  } = useGetAppointmentById(id!);
+  const { data: appointmentInfo, isLoading } = useGetAppointmentById(id!);
 
   // use react-hook-form for notes and recommendations
   const form = useForm<ConsultationFormData>({
@@ -131,7 +130,7 @@ export default function PatientConsultation() {
 
   const handleStartConsultation = () => {
     startAppointment(appointmentInfo.appointment.id).then(() => {
-      refetch();
+      setStatus("in_progress");
     });
   };
 
@@ -154,35 +153,19 @@ export default function PatientConsultation() {
       recommendations: data.recommendations || "",
     };
 
-    saveConsultation(payload);
+    saveConsultation(payload).then(() => {
+      setHasLeftNotes(true);
+    });
   };
 
   const handleCompleteConsultation = async () => {
-    completeAppointment(appointmentInfo.appointment.id);
-  };
-
-  const getStatusBadge = () => {
-    const styles = {
-      in_progress: "bg-yellow-100 text-yellow-800",
-      completed: "bg-green-100 text-green-800",
-      booked: "bg-blue-100 text-blue-800",
-      cancelled: "bg-red-100 text-red-800",
-      rescheduled: "bg-orange-100 text-orange-800",
-    };
-
-    const labels = {
-      in_progress: "In Progress",
-      completed: "Completed",
-      booked: "Booked",
-      cancelled: "Cancelled",
-      rescheduled: "Rescheduled",
-    };
-
-    return (
-      <Badge className={styles[appointmentInfo.appointment.status]}>
-        {labels[appointmentInfo.appointment.status]}
-      </Badge>
-    );
+    if (!hasLeftNotes) {
+      showErrorToast("please leave notes before completing the consultation");
+      return;
+    }
+    completeAppointment(appointmentInfo.appointment.id).then(() => {
+      setStatus("completed");
+    });
   };
 
   return (
@@ -204,21 +187,22 @@ export default function PatientConsultation() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {getStatusBadge()}
-          {appointmentInfo.appointment.status === "booked" && (
+          <Badge className={status}>{status}</Badge>
+
+          {status === "booked" && (
             <Button onClick={handleStartConsultation} disabled={isStarting}>
               <Play className="w-4 h-4 mr-2" />
               Start Consultation
             </Button>
           )}
 
-          {appointmentInfo.appointment.status === "in_progress" && (
+          {status === "in_progress" && (
             <Button
               onClick={handleCompleteConsultation}
-              disabled={isSaving}
+              disabled={isCompleting}
               className="bg-green-600 hover:bg-green-700"
             >
-              {isSaving ? (
+              {isCompleting ? (
                 "Completing..."
               ) : (
                 <>
@@ -335,10 +319,7 @@ export default function PatientConsultation() {
                               placeholder="Enter patient examination findings, symptoms, diagnosis, and observations..."
                               rows={8}
                               disabled={
-                                appointmentInfo.appointment.status ===
-                                  "booked" ||
-                                appointmentInfo.appointment.status ===
-                                  "completed"
+                                status === "booked" || status === "completed"
                               }
                               {...field}
                             />
@@ -366,7 +347,7 @@ export default function PatientConsultation() {
                 <CardContent>
                   <div className="space-y-4">
                     {/* Add Prescription */}
-                    {appointmentInfo.appointment.status === "in_progress" && (
+                    {status === "in_progress" && (
                       <div className="flex gap-2">
                         <Input
                           placeholder="e.g., Paracetamol 500mg twice daily"
@@ -398,8 +379,7 @@ export default function PatientConsultation() {
                           className="flex items-center justify-between p-3 bg-blue-50 rounded-lg"
                         >
                           <span className="font-medium">{prescription}</span>
-                          {appointmentInfo.appointment.status ===
-                            "in_progress" && (
+                          {status === "in_progress" && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -438,8 +418,7 @@ export default function PatientConsultation() {
                             placeholder="Enter follow-up instructions, lifestyle recommendations, next appointment schedule..."
                             rows={4}
                             disabled={
-                              appointmentInfo.appointment.status === "booked" ||
-                              appointmentInfo.appointment.status === "completed"
+                              status === "booked" || status === "completed"
                             }
                             {...field}
                           />
@@ -458,15 +437,16 @@ export default function PatientConsultation() {
           </Form>
 
           {/* Action Buttons */}
-          {appointmentInfo.appointment.status !== "completed" && (
+          {status !== "completed" && (
             <div className="flex justify-end gap-3">
               <Button
                 onClick={handleCompleteConsultation}
                 disabled={
-                  appointmentInfo.appointment.status === "booked" ||
+                  status === "booked" ||
                   !watchedNotes?.trim() ||
                   isCompleting ||
-                  isStarting
+                  isStarting ||
+                  !hasLeftNotes
                 }
                 className="bg-green-600 hover:bg-green-700"
               >
@@ -482,7 +462,7 @@ export default function PatientConsultation() {
             </div>
           )}
 
-          {appointmentInfo.appointment.status === "completed" && (
+          {status === "completed" && (
             <Card className="bg-green-50 border-green-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 text-green-800">

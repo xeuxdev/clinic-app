@@ -1,439 +1,253 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useParams } from "react-router";
 import {
   CreditCard,
   Calendar,
   Clock,
   User,
-  Stethoscope,
+  ArrowLeft,
   CheckCircle,
-  AlertCircle,
-  Search,
-  Filter,
 } from "lucide-react";
+import { Link } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
-import {
-  demoAppointments,
-  demoPayments,
-  getPatientById,
-  getDoctorById,
-  type Payment,
-} from "~/lib/demo-data";
-import { toast } from "sonner";
+  useGetAppointmentById,
+  usePayForAppointment,
+} from "~/api/appointments";
+import { Skeleton } from "~/components/ui/skeleton";
 
 export function meta() {
   return [
-    { title: "Payments - Clinic Management" },
+    { title: "Payment - Clinic Management" },
     {
       name: "description",
-      content: "Process payments and manage payment records",
+      content: "Process payment for appointment",
     },
   ];
 }
 
 export default function PaymentsPage() {
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [processingPayment, setProcessingPayment] = useState<string | null>(
-    null
-  );
+  const { appointmentId } = useParams();
 
-  // Get pending payments for today
-  const todaysAppointments = demoAppointments.filter(
-    (a) => a.date === selectedDate
-  );
-  const pendingPayments = todaysAppointments.filter(
-    (a) => a.paymentStatus === "pending"
-  );
+  // Fetch appointment details
+  const appointmentQuery = useGetAppointmentById(appointmentId!);
+  const payMutation = usePayForAppointment();
 
-  // Filter payments based on criteria
-  const filteredPayments = demoPayments.filter((payment) => {
-    const matchesDate = payment.date === selectedDate;
-    const matchesStatus =
-      statusFilter === "all" || payment.status === statusFilter;
+  const appointment = appointmentQuery.data?.appointment;
 
-    let matchesSearch = true;
-    if (searchQuery) {
-      const patient = getPatientById(payment.patientId);
-      const searchLower = searchQuery.toLowerCase();
-      matchesSearch =
-        patient?.name.toLowerCase().includes(searchLower) ||
-        patient?.phone.includes(searchQuery) ||
-        payment.amount.toString().includes(searchQuery);
-    }
-
-    return matchesDate && matchesStatus && matchesSearch;
-  });
-
-  const getStatusBadge = (status: Payment["status"]) => {
-    const styles = {
-      completed: "bg-green-100 text-green-800",
-      pending: "bg-orange-100 text-orange-800",
-      failed: "bg-red-100 text-red-800",
-    };
-
-    return (
-      <Badge className={styles[status]}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
-  };
-
-  const getMethodBadge = (method: Payment["method"]) => {
-    const styles = {
-      cash: "bg-blue-100 text-blue-800",
-      card: "bg-purple-100 text-purple-800",
-      insurance: "bg-green-100 text-green-800",
-    };
-
-    return (
-      <Badge variant="outline" className={styles[method]}>
-        {method.charAt(0).toUpperCase() + method.slice(1)}
-      </Badge>
-    );
-  };
-
-  const handleProcessPayment = async (
-    appointmentId: string,
-    amount: number,
-    method: string
-  ) => {
-    setProcessingPayment(appointmentId);
-
-    try {
-      // Simulate payment processing
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // In a real app, this would:
-      // 1. Process the payment with payment gateway
-      // 2. Update appointment payment status
-      // 3. Create payment record
-      // 4. Generate receipt
-
-      toast.success(
-        `Payment of ₦${amount.toLocaleString()} processed successfully!`
-      );
-    } catch (error) {
-      toast.error("Payment processing failed. Please try again.");
-    } finally {
-      setProcessingPayment(null);
+  const handlePayment = () => {
+    if (appointmentId) {
+      payMutation.mutate(appointmentId);
     }
   };
 
-  const getTodaysStats = () => {
-    const todaysPayments = demoPayments.filter((p) => p.date === selectedDate);
-    const totalCollected = todaysPayments
-      .filter((p) => p.status === "completed")
-      .reduce((sum, p) => sum + p.amount, 0);
-    const pendingAmount = pendingPayments.reduce((sum, a) => sum + 5000, 0); // Assuming 5000 per consultation
+  if (appointmentQuery.isLoading) {
+    return (
+      <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex items-center gap-4">
+          <Link to="/appointments">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Appointments
+            </Button>
+          </Link>
+        </div>
 
-    return {
-      totalCollected,
-      pendingAmount,
-      completedPayments: todaysPayments.filter((p) => p.status === "completed")
-        .length,
-      pendingCount: pendingPayments.length,
-    };
-  };
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  const stats = getTodaysStats();
+  if (appointmentQuery.isError) {
+    return (
+      <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex items-center gap-4">
+          <Link to="/appointments">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Appointments
+            </Button>
+          </Link>
+        </div>
+
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-red-600">Failed to load appointment details.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!appointment) {
+    return (
+      <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex items-center gap-4">
+          <Link to="/appointments">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Appointments
+            </Button>
+          </Link>
+        </div>
+
+        <Card>
+          <CardContent className="p-6 text-center">
+            <p className="text-gray-600">Appointment not found.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex items-center gap-4">
+        <Link to="/appointments">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Appointments
+          </Button>
+        </Link>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Payment Management
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Process Payment</h1>
           <p className="text-gray-600">
-            Process payments and manage payment records
+            Payment for appointment #{appointment.id}
           </p>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Total Collected Today
-                </p>
-                <p className="text-2xl font-bold text-green-600">
-                  ₦{stats.totalCollected.toLocaleString()}
-                </p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Pending Amount
-                </p>
-                <p className="text-2xl font-bold text-orange-600">
-                  ₦{stats.pendingAmount.toLocaleString()}
-                </p>
-              </div>
-              <AlertCircle className="w-8 h-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Completed Payments
-                </p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {stats.completedPayments}
-                </p>
-              </div>
-              <CreditCard className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Pending Payments
-                </p>
-                <p className="text-2xl font-bold text-red-600">
-                  {stats.pendingCount}
-                </p>
-              </div>
-              <Clock className="w-8 h-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Pending Payments */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-orange-600" />
-              Pending Payments
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {pendingPayments.map((appointment) => {
-                const patient = getPatientById(appointment.patientId);
-                const doctor = getDoctorById(appointment.doctorId);
-                const isProcessing = processingPayment === appointment.id;
-
-                return (
-                  <div key={appointment.id} className="p-4 border rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="font-medium">{patient?.name}</p>
-                        <p className="text-sm text-gray-600">
-                          {doctor?.name} • {appointment.time}
-                        </p>
-                      </div>
-                      <Badge className="bg-orange-100 text-orange-800">
-                        ₦5,000
-                      </Badge>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          handleProcessPayment(appointment.id, 5000, "cash")
-                        }
-                        disabled={isProcessing}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        {isProcessing ? "Processing..." : "Collect Cash"}
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          handleProcessPayment(appointment.id, 5000, "card")
-                        }
-                        disabled={isProcessing}
-                      >
-                        Card Payment
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {pendingPayments.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
-                  All payments collected for today!
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Payment Filters & Search */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="w-5 h-5" />
-              Payment History
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="space-y-2 flex-1">
-                <label className="text-sm font-medium">Date</label>
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Status</label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-[120px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search payments..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Payment History Table */}
+      {/* Appointment Details */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5" />
-            Payment Records for {new Date(selectedDate).toLocaleDateString()}
+            <Calendar className="w-5 h-5" />
+            Appointment Details
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Patient</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPayments.map((payment) => {
-                  const patient = getPatientById(payment.patientId);
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">
+                Patient Information
+              </h3>
+              <div className="space-y-1 text-sm">
+                <p>
+                  <span className="font-medium">Name:</span>{" "}
+                  {appointment.patient_name || "Unknown"}
+                </p>
+                <p>
+                  <span className="font-medium">Phone:</span>{" "}
+                  {appointment.patient_phone || "N/A"}
+                </p>
+                <p>
+                  <span className="font-medium">Email:</span>{" "}
+                  {appointment.patient_email || "N/A"}
+                </p>
+              </div>
+            </div>
 
-                  return (
-                    <TableRow key={payment.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{patient?.name}</p>
-                          <p className="text-sm text-gray-500">
-                            {patient?.phone}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-medium">
-                          ₦{payment.amount.toLocaleString()}
-                        </span>
-                      </TableCell>
-                      <TableCell>{getMethodBadge(payment.method)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-gray-400" />
-                          {new Date(payment.date).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
-                            Receipt
-                          </Button>
-                          {payment.status === "failed" && (
-                            <Button size="sm" variant="outline">
-                              Retry
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">
+                Appointment Information
+              </h3>
+              <div className="space-y-1 text-sm">
+                <p>
+                  <span className="font-medium">Doctor:</span>{" "}
+                  {appointment.doctor_name || "Unknown"}
+                </p>
+                <p>
+                  <span className="font-medium">Date:</span>{" "}
+                  {new Date(appointment.appointment_date).toLocaleDateString()}
+                </p>
+                <p>
+                  <span className="font-medium">Time:</span>{" "}
+                  {new Date(appointment.appointment_date).toLocaleTimeString(
+                    [],
+                    { hour: "2-digit", minute: "2-digit" }
+                  )}
+                </p>
+                <p>
+                  <span className="font-medium">Status:</span>{" "}
+                  <Badge className={appointment.status}>
+                    {appointment.status}
+                  </Badge>
+                </p>
+              </div>
+            </div>
           </div>
 
-          {filteredPayments.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              No payment records found for{" "}
-              {new Date(selectedDate).toLocaleDateString()}
+          {appointment.note && (
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">Notes</h3>
+              <p className="text-sm text-gray-600">{appointment.note}</p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Payment Section */}
+      {!payMutation.isSuccess && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5" />
+              Payment Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-medium">Consultation Fee</p>
+                <p className="text-2xl font-bold text-green-600">₦5,000</p>
+              </div>
+              <Button
+                onClick={handlePayment}
+                disabled={payMutation.isPending}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {payMutation.isPending ? (
+                  "Processing..."
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Pay Now
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Success Section */}
+      {payMutation.isSuccess && (
+        <Card className="bg-green-50 border-green-200">
+          <CardContent className="p-6 text-center">
+            <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-600" />
+            <h2 className="text-xl font-semibold mb-2 text-green-800">
+              Payment Successful!
+            </h2>
+            <p className="text-green-600 mb-4">
+              Your payment has been processed successfully.
+            </p>
+            <Link to="/appointments">
+              <Button>Back to Appointments</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

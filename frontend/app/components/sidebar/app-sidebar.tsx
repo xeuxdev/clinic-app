@@ -51,11 +51,6 @@ const attendantNavigationItems = [
     url: "/appointments/book",
     icon: CalendarPlus,
   },
-  {
-    title: "Payments",
-    url: "/payments",
-    icon: CreditCard,
-  },
 ];
 
 // Navigation items for doctor

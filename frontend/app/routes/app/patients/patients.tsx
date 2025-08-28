@@ -16,8 +16,8 @@ import {
 import { useListAppointments } from "~/api/appointments";
 import { useListPatients, useSearchPatients } from "~/api/patients";
 import type { Patient as ApiPatient } from "~/api/types";
+import { useUser } from "~/context/user-context";
 
-// Local UI patient shape (replaces demo-data Patient)
 type UIPatient = {
   id: string;
   name: string;
@@ -37,13 +37,17 @@ export function meta() {
 }
 
 export default function PatientsPage() {
+  const { user } = useUser();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredPatients, setFilteredPatients] = useState<UIPatient[]>([]);
 
   // React Query hooks
   const listQuery = useListPatients();
   const searchQueryHook = useSearchPatients(searchQuery);
-  const appointmentsQuery = useListAppointments();
+  const appointmentsQuery = useListAppointments({
+    role: user?.role!,
+  });
 
   // Map an API Patient to the demo UI Patient shape
   const mapApiPatient = (p: ApiPatient): UIPatient => ({
@@ -88,7 +92,7 @@ export default function PatientsPage() {
     const appts = appointmentsQuery.data ?? [];
     const list: any[] = Array.isArray(appts)
       ? appts
-      : appts?.bookings ?? appts?.data ?? [];
+      : appts?.appointments ?? [];
     const idNum = Number(patientId);
     return list.filter((a) => {
       return (
@@ -195,7 +199,7 @@ export default function PatientsPage() {
                   <TableHead>Age</TableHead>
                   <TableHead>Registration Date</TableHead>
                   <TableHead>Appointments</TableHead>
-                  <TableHead>Actions</TableHead>
+                  {user?.role === "attendant" && <TableHead>Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -243,15 +247,19 @@ export default function PatientsPage() {
                         {getPatientAppointmentCount(patient.id)} appointments
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Link to={`/appointments/book?patientId=${patient.id}`}>
-                          <Button size="sm" variant="outline">
-                            Book Appointment
-                          </Button>
-                        </Link>
-                      </div>
-                    </TableCell>
+                    {user?.role === "attendant" && (
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Link
+                            to={`/appointments/book?patientId=${patient.id}`}
+                          >
+                            <Button size="sm" variant="outline">
+                              Book Appointment
+                            </Button>
+                          </Link>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

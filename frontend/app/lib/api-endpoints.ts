@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
     GET_BY_ID: (id: string | number) => `/appointment/${id}`,
     TODAY: "/appointment/today",
     SEARCH: (query: string) => `/appointment/search?q=${query}`,
+    PAY: (id: string | number) => `/appointment/pay/${id}`,
     START: (id: string | number) => `/appointment/start/${id}`,
     RESCHEDULE: (id: string | number) => `/appointment/reschedule/${id}`,
     CANCEL: (id: string | number) => `/appointment/cancel/${id}`,
@@ -21,6 +22,8 @@ export const API_ENDPOINTS = {
   PATIENTS: {
     GET_ALL: "/patients",
     SEARCH: (query: string) => `/patients/search?q=${query}`,
+    CONSULTATION_NOTES: (patientId: string | number) =>
+      `/patients/consultation/${patientId}`,
   },
   DOCTORS: {
     GET_DOCTORS: "/doctors",

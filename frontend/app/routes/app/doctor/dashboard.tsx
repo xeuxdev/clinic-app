@@ -1,13 +1,8 @@
-import {
-  Calendar,
-  CheckCircle,
-  Clock,
-  FileText,
-  Play,
-  User,
-} from "lucide-react";
+import { Calendar, CheckCircle, Clock, FileText, Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
+import { useListAppointments } from "~/api/appointments";
+import type { Appointment } from "~/api/types";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -19,9 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { useListTodaysAppointments } from "~/api/appointments";
+import { ViewConsultationNotesModal } from "~/components/appointments/view-consultation-notes";
+import { RescheduleAppointmentModal } from "~/components/appointments/reschedule-appointment-modal";
+import { CancelAppointmentModal } from "~/components/appointments/cancel-appointment-modal";
 import { useUser } from "~/context/user-context";
-import type { Appointment } from "~/api/types";
+import { calculateAge } from "~/lib/utils";
 
 export function meta() {
   return [
@@ -36,9 +33,14 @@ export function meta() {
 export default function DoctorDashboard() {
   const { user } = useUser();
 
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<number | null>(
+    null
+  );
+
   // Default selected doctor comes from the logged in user when available.
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(
-    () => user?.accountId ?? ""
+  const [selectedDoctorId, setSelectedDoctorId] = useState<number | null>(
+    () => user?.accountId ?? null
   );
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export default function DoctorDashboard() {
   }, [user]);
 
   // Fetch today's appointments from the API. We'll filter client-side by doctor id.
-  const todaysQuery = useListTodaysAppointments();
+  const todaysQuery = useListAppointments({ date: "today", role: "doctor" });
   const allTodaysAppointments: Appointment[] =
     todaysQuery.data?.appointments ?? [];
 
@@ -61,26 +63,6 @@ export default function DoctorDashboard() {
   // Selected doctor display name falls back to the user full name for doctors.
   const selectedDoctorName =
     user?.role === "doctor" ? user?.fullName : undefined;
-
-  const getStatusBadge = (status: Appointment["status"]) => {
-    const styles: Record<string, string> = {
-      booked: "bg-blue-100 text-blue-800",
-      in_progress: "bg-yellow-100 text-yellow-800",
-      completed: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
-      rescheduled: "bg-purple-100 text-purple-800",
-    };
-
-    const label = status
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-
-    return (
-      <Badge className={styles[status] ?? "bg-gray-100 text-gray-800"}>
-        {label}
-      </Badge>
-    );
-  };
 
   const getNextAppointment = () => {
     const now = new Date();
@@ -253,7 +235,9 @@ export default function DoctorDashboard() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant="outline">N/A</Badge>
+                              <Badge variant="outline">
+                                {calculateAge(appointment.patient_dob)}
+                              </Badge>
                             </TableCell>
                             <TableCell>
                               <div className="text-sm">
@@ -264,19 +248,39 @@ export default function DoctorDashboard() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {getStatusBadge(appointment.status)}
+                              <Badge className={appointment.status}>
+                                {appointment.status}
+                              </Badge>
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
                                 {appointment.status === "booked" && (
-                                  <Link
-                                    to={`/doctor/consultation/${appointment.id}`}
-                                  >
-                                    <Button size="sm">
-                                      <Play className="w-3 h-3 mr-1" />
-                                      Start
-                                    </Button>
-                                  </Link>
+                                  <>
+                                    <Link
+                                      to={`/doctor/consultation/${appointment.id}`}
+                                    >
+                                      <Button size="sm">
+                                        <Play className="w-3 h-3 mr-1" />
+                                        Start
+                                      </Button>
+                                    </Link>
+                                    <RescheduleAppointmentModal
+                                      appointmentId={appointment.id}
+                                      trigger={
+                                        <Button size="sm" variant="outline">
+                                          Reschedule
+                                        </Button>
+                                      }
+                                    />
+                                    <CancelAppointmentModal
+                                      appointmentId={appointment.id}
+                                      trigger={
+                                        <Button size="sm" variant="destructive">
+                                          Cancel
+                                        </Button>
+                                      }
+                                    />
+                                  </>
                                 )}
 
                                 {appointment.status === "in_progress" && (
@@ -294,7 +298,14 @@ export default function DoctorDashboard() {
                                 )}
 
                                 {appointment.status === "completed" && (
-                                  <Button size="sm" variant="outline">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSelectedAppointment(appointment.id);
+                                      setIsOpen(true);
+                                    }}
+                                  >
                                     <FileText className="w-3 h-3 mr-1" />
                                     View Notes
                                   </Button>
@@ -306,6 +317,12 @@ export default function DoctorDashboard() {
                       })}
                   </TableBody>
                 </Table>
+
+                <ViewConsultationNotesModal
+                  appointmentId={selectedAppointment!}
+                  isOpen={isOpen}
+                  onOpenChange={setIsOpen}
+                />
               </div>
 
               {doctorAppointments.length === 0 && (

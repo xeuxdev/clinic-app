@@ -1,7 +1,7 @@
-import { Calendar, Clock, CreditCard, Plus, Search, Users } from "lucide-react";
+import { Calendar, Clock, Plus, Search, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { useListTodaysAppointments } from "~/api/appointments";
+import { useListAppointments } from "~/api/appointments";
 import { useListPatients } from "~/api/patients";
 import type { Patient } from "~/api/types";
 import { Badge } from "~/components/ui/badge";
@@ -27,8 +27,11 @@ export default function AttendantDashboard() {
   // `useListPatients` returns an array of patients (or undefined while loading)
   const patientsList: Patient[] = patients ?? [];
 
-  const { data: todaysAppointmentsData } = useListTodaysAppointments();
-  // API returns an object with `appointments` property per `TodaysAppointmentResponse`
+  const { data: todaysAppointmentsData } = useListAppointments({
+    date: "today",
+    role: "attendant",
+  });
+  // API returns an object with `appointments` property per `AppointmentsListResponse`
   const todaysAppointments = todaysAppointmentsData?.appointments ?? [];
 
   const totalPatients = patientsList.length;
@@ -36,7 +39,6 @@ export default function AttendantDashboard() {
   const totalDoctors = Array.from(
     new Set(todaysAppointments.map((a) => a.doctor_id))
   ).length;
-  const pendingPayments = 0; // payment info not available on the current API Appointment shape
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
@@ -171,22 +173,6 @@ export default function AttendantDashboard() {
             </div>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Pending Payments
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {pendingPayments}
-                </p>
-              </div>
-              <CreditCard className="w-8 h-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -282,7 +268,7 @@ export default function AttendantDashboard() {
 
                 return (
                   <div
-                    key={appointment.appointment_id}
+                    key={appointment.id}
                     className="flex items-center justify-between p-3 border rounded-lg"
                   >
                     <div className="flex-1">
@@ -329,13 +315,6 @@ export default function AttendantDashboard() {
               <Button variant="outline" className="w-full h-16 flex-col gap-2">
                 <Calendar className="w-6 h-6" />
                 <span>View Appointments</span>
-              </Button>
-            </Link>
-
-            <Link to="/payments">
-              <Button variant="outline" className="w-full h-16 flex-col gap-2">
-                <CreditCard className="w-6 h-6" />
-                <span>Process Payments</span>
               </Button>
             </Link>
 

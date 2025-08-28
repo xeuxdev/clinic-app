@@ -18,7 +18,7 @@ export default [
     route("/patients/register", "routes/app/patients/register.tsx"),
     route("/appointments", "routes/app/appointments/appointments.tsx"),
     route("/appointments/book", "routes/app/appointments/book.tsx"),
-    route("/payments", "routes/app/payments/payments.tsx"),
+    route("/payments/:appointmentId", "routes/app/payments/payments.tsx"),
 
     // Doctor routes
     route("/doctor", "routes/app/doctor/dashboard.tsx"),

@@ -1,8 +1,18 @@
-import { Calendar, Clock, Eye, Plus, Search } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  CreditCard,
+  FileText,
+  PlayIcon,
+  Plus,
+  Search,
+} from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
-import { useListAppointments, useSearchAppointments } from "~/api/appointments";
+import { useListAppointments } from "~/api/appointments";
 import type { Appointment as ApiAppointment } from "~/api/types";
+import { ViewConsultationNotesModal } from "~/components/appointments/view-consultation-notes";
+import { RescheduleAppointmentModal } from "~/components/appointments/reschedule-appointment-modal";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -22,23 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import type { Appointment } from "~/lib/demo-data";
-
-type MappedAppointment = {
-  patient_name?: string;
-  patient_phone?: string;
-  patient_email?: string;
-  doctor_name?: string;
-  doctor_email?: string;
-  id: string;
-  patientId?: string;
-  doctorId?: string;
-  date: string;
-  time: string;
-  status: Appointment["status"];
-  paymentStatus: Appointment["paymentStatus"];
-  notes?: string;
-};
+import { useUser } from "~/context/user-context";
 
 export function meta() {
   return [
@@ -57,121 +51,58 @@ export default function AppointmentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // React Query hooks (list + search)
-  const listQuery = useListAppointments();
-  const searchQueryResult = useSearchAppointments(searchQuery);
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<ApiAppointment | null>(null);
 
-  // Transform API booking shape to the local demo Appointment shape
-  const transformBooking = (b: Partial<ApiAppointment>): MappedAppointment => {
-    const dateObj = b.appointment_date
-      ? new Date(b.appointment_date)
-      : new Date();
-    const date = dateObj.toISOString().split("T")[0];
-    const time = dateObj.toTimeString().slice(0, 5);
+  const { user } = useUser();
 
-    const statusMap: Record<string, Appointment["status"]> = {
-      booked: "scheduled",
-      in_progress: "in-progress",
+  // Determine if selected date is today
+  const today = new Date().toISOString().split("T")[0];
+  const isToday = selectedDate === today;
+
+  // Map frontend status to backend status
+  const getBackendStatus = (frontendStatus: string) => {
+    const statusMap: Record<string, string> = {
+      scheduled: "booked",
+      rescheduled: "rescheduled",
+      "in-progress": "in_progress",
       completed: "completed",
       cancelled: "cancelled",
-      rescheduled: "scheduled",
     };
-
-    const mapped: MappedAppointment = {
-      id: String(b.id ?? ""),
-      patientId: String(b.profile_id ?? ""),
-      doctorId: String(b.doctor_id ?? ""),
-      date,
-      time,
-      status:
-        b.status && statusMap[b.status] ? statusMap[b.status] : "scheduled",
-      paymentStatus: "paid",
-      notes: (b.note ?? "") as string,
-    };
-
-    // attach API-provided display fields as metadata so rendering can fall back to them
-    if (b.patient_name) mapped.patient_name = b.patient_name;
-    if (b.patient_phone) mapped.patient_phone = b.patient_phone;
-    if (b.patient_email) mapped.patient_email = b.patient_email;
-    if (b.doctor_name) mapped.doctor_name = b.doctor_name;
-    if (b.doctor_email) mapped.doctor_email = b.doctor_email;
-
-    return mapped;
+    return statusMap[frontendStatus] || frontendStatus;
   };
 
-  // Prefer search results when a query is present, otherwise use list
-  const apiBookings = searchQuery
-    ? searchQueryResult.data?.bookings
-    : listQuery.data?.bookings;
-
-  // Build source appointments (map API bookings to local shape when present)
-  // If the API hasn't returned yet, use an empty list — everything depends on the API now
-  const sourceAppointments: MappedAppointment[] = Array.isArray(apiBookings)
-    ? apiBookings.map(transformBooking)
-    : [];
-
-  // Filter appointments based on selected criteria
-  const filteredAppointments = sourceAppointments.filter((appointment) => {
-    const matchesDate = appointment.date === selectedDate;
-    const matchesStatus =
-      statusFilter === "all" || appointment.status === statusFilter;
-
-    let matchesSearch = true;
-    if (searchQuery) {
-      const searchLower = searchQuery.toLowerCase();
-      matchesSearch =
-        !!appointment.patient_name?.toLowerCase().includes(searchLower) ||
-        !!appointment.doctor_name?.toLowerCase().includes(searchLower) ||
-        !!appointment.patient_phone?.includes(searchQuery) ||
-        appointment.time.includes(searchQuery);
-    }
-
-    return matchesDate && matchesStatus && matchesSearch;
+  // React Query hook with filters
+  const appointmentsQuery = useListAppointments({
+    date: isToday ? "today" : selectedDate,
+    search: searchQuery || undefined,
+    status: statusFilter !== "all" ? getBackendStatus(statusFilter) : undefined,
+    role: user?.role!,
   });
 
-  const getStatusBadge = (status: Appointment["status"]) => {
-    const styles = {
-      scheduled: "bg-blue-100 text-blue-800",
-      "in-progress": "bg-yellow-100 text-yellow-800",
-      completed: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
-    };
+  // Use API data directly
+  const sourceAppointments = appointmentsQuery?.data?.appointments || [];
 
-    return (
-      <Badge className={styles[status]}>
-        {status.charAt(0).toUpperCase() + status.slice(1).replace("-", " ")}
-      </Badge>
-    );
-  };
-
-  const getPaymentBadge = (status: Appointment["paymentStatus"]) => {
-    const styles = {
-      paid: "bg-green-100 text-green-800",
-      pending: "bg-orange-100 text-orange-800",
-      partial: "bg-yellow-100 text-yellow-800",
-    };
-
-    return (
-      <Badge className={styles[status]} variant="outline">
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </Badge>
-    );
-  };
+  const filteredAppointments = sourceAppointments.filter((appointment) =>
+    user?.role === "doctor"
+      ? String(user.userId) === String(appointment.doctor_id)
+      : true
+  );
 
   const getStatusCounts = () => {
-    const dayAppointments = sourceAppointments.filter(
-      (a) => a.date === selectedDate
-    );
+    // sourceAppointments is already filtered by date from backend
     return {
-      total: dayAppointments.length,
-      scheduled: dayAppointments.filter((a) => a.status === "scheduled").length,
-      inProgress: dayAppointments.filter((a) => a.status === "in-progress")
-        .length,
-      completed: dayAppointments.filter((a) => a.status === "completed").length,
-      cancelled: dayAppointments.filter((a) => a.status === "cancelled").length,
-      pendingPayment: dayAppointments.filter(
-        (a) => a.paymentStatus === "pending"
+      total: sourceAppointments.length,
+      scheduled: sourceAppointments.filter(
+        (a) => a.status === "booked" || a.status === "rescheduled"
       ).length,
+      inProgress: sourceAppointments.filter((a) => a.status === "in_progress")
+        .length,
+      completed: sourceAppointments.filter((a) => a.status === "completed")
+        .length,
+      cancelled: sourceAppointments.filter((a) => a.status === "cancelled")
+        .length,
     };
   };
 
@@ -189,16 +120,18 @@ export default function AppointmentsPage() {
             Schedule and manage patient appointments
           </p>
         </div>
-        <Link to="/appointments/book">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Book New Appointment
-          </Button>
-        </Link>
+        {user?.role === "attendant" && (
+          <Link to="/appointments/book">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Book New Appointment
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-blue-600">
@@ -243,15 +176,6 @@ export default function AppointmentsPage() {
             <p className="text-xs text-gray-600">Cancelled</p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-orange-600">
-              {statusCounts.pendingPayment}
-            </p>
-            <p className="text-xs text-gray-600">Payment Due</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters */}
@@ -278,7 +202,7 @@ export default function AppointmentsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="rescheduled">Re-Scheduled</SelectItem>
                   <SelectItem value="in-progress">In Progress</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -327,44 +251,35 @@ export default function AppointmentsPage() {
                   <TableHead>Doctor</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Payment</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAppointments.map((appointment) => {
-                  // Use API-provided fields only (no demo lookups)
-                  const mappedAppt = appointment as MappedAppointment;
-                  const patientName = mappedAppt.patient_name ?? "Unknown";
-                  const patientAge = null;
-                  const patientPhone = mappedAppt.patient_phone ?? "";
-                  const patientEmail = mappedAppt.patient_email ?? "";
-
-                  const doctorName = mappedAppt.doctor_name ?? "Unknown";
-                  const doctorSpec = "";
+                  // Use API fields directly
+                  const patientName = appointment.patient_name || "Unknown";
+                  const patientPhone = appointment.patient_phone || "";
+                  const patientEmail = appointment.patient_email || "";
+                  const doctorName = appointment.doctor_name || "Unknown";
+                  const dateObj = new Date(appointment.appointment_date);
+                  const time = dateObj.toTimeString().slice(0, 5);
 
                   return (
                     <TableRow key={appointment.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-gray-400" />
-                          <span className="font-medium">
-                            {appointment.time}
-                          </span>
+                          <span className="font-medium">{time}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{patientName}</p>
-                          <p className="text-sm text-gray-500">
-                            {patientAge ? `Age: ${patientAge}` : null}
-                          </p>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{doctorName}</p>
-                          <p className="text-sm text-gray-500">{doctorSpec}</p>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -374,32 +289,71 @@ export default function AppointmentsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {getStatusBadge(appointment.status)}
-                      </TableCell>
-                      <TableCell>
-                        {getPaymentBadge(appointment.paymentStatus)}
+                        <Badge className={appointment.status}>
+                          {appointment.status}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          {appointment.paymentStatus === "pending" && (
-                            <Link
-                              to={`/payments?appointmentId=${appointment.id}`}
-                            >
-                              <Button size="sm" variant="outline">
-                                Collect Payment
+                          {appointment.status === "booked" && (
+                            <RescheduleAppointmentModal
+                              appointmentId={appointment.id}
+                              trigger={
+                                <Button size="sm" variant="outline">
+                                  Reschedule
+                                </Button>
+                              }
+                            />
+                          )}
+
+                          {user?.role === "doctor" && (
+                            <Link to={`/doctor/consultation/${appointment.id}`}>
+                              <Button
+                                size="sm"
+                                disabled={appointment.status !== "booked"}
+                              >
+                                <PlayIcon className="w-3 h-3 mr-1" />
+                                Start
                               </Button>
                             </Link>
                           )}
 
-                          {appointment.status === "scheduled" && (
-                            <Button size="sm" variant="outline">
-                              Reschedule
-                            </Button>
-                          )}
+                          {user?.role === "attendant" &&
+                            (appointment.paymentstatus === "pending" ? (
+                              <Link to={`/payments/${appointment.id}`}>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="bg-green-50 hover:bg-green-100 border-green-200"
+                                >
+                                  <CreditCard className="w-4 h-4 mr-1" />
+                                  Pay
+                                </Button>
+                              </Link>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="bg-gray-100 text-gray-600"
+                              >
+                                Paid
+                              </Badge>
+                            ))}
 
-                          <Button size="sm" variant="ghost">
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          {appointment.status === "completed" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedAppointment(appointment);
+                                  setIsOpen(true);
+                                }}
+                              >
+                                <FileText className="w-3 h-3 mr-1" />
+                                View Notes
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -418,18 +372,27 @@ export default function AppointmentsPage() {
                 : `No appointments scheduled for ${new Date(
                     selectedDate
                   ).toLocaleDateString()}`}
-              <div className="mt-2">
-                <Link to="/appointments/book">
-                  <Button variant="outline" size="sm">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Book New Appointment
-                  </Button>
-                </Link>
-              </div>
+
+              {user?.role === "attendant" && (
+                <div className="mt-2">
+                  <Link to="/appointments/book">
+                    <Button variant="outline" size="sm">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Book New Appointment
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <ViewConsultationNotesModal
+        appointmentId={selectedAppointment?.id!}
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+      />
     </div>
   );
 }
