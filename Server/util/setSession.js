@@ -11,12 +11,16 @@ export const setSession = (res, userId) => {
 
   const cookieName = "HealthCare_session";
 
-  res.cookie(cookieName, token, {
+  const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production", // only HTTPS in production
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
     maxAge: 2 * 24 * 60 * 60 * 1000, // 2 days
-  });
+    domain: new URL(process.env.FRONTEND_URL).hostname,
+  };
+
+  res.cookie(cookieName, token, cookieOptions);
 
   return token;
 };
