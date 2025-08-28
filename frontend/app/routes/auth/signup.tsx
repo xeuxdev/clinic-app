@@ -73,7 +73,7 @@ export default function Signup() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4">
       <div className="space-y-2 text-left">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Create Account
@@ -85,7 +85,7 @@ export default function Signup() {
       </div>
 
       <Card className="border-0 shadow-none p-0 bg-transparent">
-        <CardContent className="p-0">
+        <CardContent className="p-0 sm:px-0">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
