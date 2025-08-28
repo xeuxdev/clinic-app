@@ -110,7 +110,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS appointment.bookings (
         id SERIAL PRIMARY KEY,
         profile_id INT NOT NULL REFERENCES "user".profile(id) ON DELETE CASCADE,
-        doctor_id INT,
+        doctor_id INT NOT NULL,
         appointment_date TIMESTAMP NOT NULL,
         note TEXT,
         paymentStatus VARCHAR(20) DEFAULT 'pending'
@@ -147,6 +147,6 @@ const createTables = async () => {
 };
 
 export const initiateDatabase = async () => {
-  // await createDatabase(); // Commented out for production (Aiven), assuming database exists
+  await createDatabase(); // Commented out for production (Aiven), assuming database exists
   await createTables();
 };
