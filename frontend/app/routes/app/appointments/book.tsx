@@ -242,7 +242,7 @@ export default function BookAppointment() {
       profile_id: Number(values.patientId),
       appointment_date: appointmentDate,
       doctor_id: Number(values.doctorId),
-      notes: values.note || undefined,
+      note: values.note || undefined,
     };
 
     await addAppointment(payload).then(() => {
