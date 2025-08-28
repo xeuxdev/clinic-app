@@ -5,6 +5,7 @@ dotenv.config();
 const connectionUrl = process.env.DATABASE_URL;
 const url = new URL(connectionUrl);
 const dbName = url.pathname.slice(1);
+const sslMode = url.searchParams.get("sslmode");
 
 // Pool for checking/creating the database
 const defaultPool = new Pool({
@@ -13,6 +14,7 @@ const defaultPool = new Pool({
   password: url.password,
   port: Number(url.port) || 5432,
   database: "postgres",
+  ssl: sslMode === "require",
 });
 
 // Pool for working inside the hospital DB
@@ -22,6 +24,7 @@ export const pool = new Pool({
   password: url.password,
   port: Number(url.port) || 5432,
   database: dbName,
+  ssl: sslMode === "require",
 });
 
 // Create the database if it doesn’t exist
