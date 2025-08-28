@@ -14,7 +14,7 @@ const defaultPool = new Pool({
   password: url.password,
   port: Number(url.port) || 5432,
   database: "postgres",
-  ssl: sslMode === "require",
+  ssl: sslMode === "require" ? { rejectUnauthorized: false } : false,
 });
 
 // Pool for working inside the hospital DB
@@ -24,7 +24,7 @@ export const pool = new Pool({
   password: url.password,
   port: Number(url.port) || 5432,
   database: dbName,
-  ssl: sslMode === "require",
+  ssl: sslMode === "require" ? { rejectUnauthorized: false } : false,
 });
 
 // Create the database if it doesn’t exist
@@ -147,6 +147,6 @@ const createTables = async () => {
 };
 
 export const initiateDatabase = async () => {
-  await createDatabase();
+  // await createDatabase(); // Commented out for production (Aiven), assuming database exists
   await createTables();
 };
