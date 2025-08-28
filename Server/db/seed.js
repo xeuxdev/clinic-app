@@ -24,7 +24,6 @@ const clearTables = async (client) => {
     await client.query("DELETE FROM appointment.bookings");
     await client.query("DELETE FROM doctor.details");
     await client.query('DELETE FROM "user".profile');
-    await client.query("DELETE FROM payment.transactions");
     await client.query("DELETE FROM auth.accounts");
     await client.query("COMMIT");
   } catch (err) {
@@ -75,10 +74,11 @@ const createAppointment = async (
   note,
   status = "booked"
 ) => {
+  const paymentStatus = status === "completed" ? "paid" : "pending";
   const res = await client.query(
-    `INSERT INTO appointment.bookings (profile_id, doctor_id, appointment_date, note, status, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING id`,
-    [profileId, doctorId, appointmentDate, note, status]
+    `INSERT INTO appointment.bookings (profile_id, doctor_id, appointment_date, note, paymentStatus, status, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING id`,
+    [profileId, doctorId, appointmentDate, note, paymentStatus, status]
   );
   return res.rows[0].id;
 };

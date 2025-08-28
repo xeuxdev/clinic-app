@@ -60,6 +60,35 @@ export const searchPatients = [
   },
 ];
 
+export const getConsultationById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM consultation.records WHERE appointment_id = $1`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Consultation record not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      consultation: result.rows[0],
+    });
+  } catch (error) {
+    console.error("❌ Error fetching consultation record:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 // Get doctors (accounts with role = 'doctor') with profiles and doctor details
 export const getDoctors = async (req, res) => {
   try {

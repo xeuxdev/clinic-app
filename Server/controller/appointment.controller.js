@@ -102,6 +102,15 @@ export const addAppointment = [
 export const getAppointmentById = async (req, res) => {
   const { id } = req.params;
 
+  // Validate that id is a valid integer
+  const idNum = parseInt(id, 10);
+  if (isNaN(idNum) || idNum <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid appointment ID. Must be a positive integer.",
+    });
+  }
+
   try {
     const appointment = await pool.query(
       `SELECT
@@ -148,10 +157,11 @@ export const getAppointmentById = async (req, res) => {
 };
 
 // List All Appointments
-export const listAppointment = async (req, res) => {
+export const getAppointments = async (req, res) => {
+  const { date, search, status, role } = req.query;
+
   try {
-    const bookings = await pool.query(
-      `
+    let query = `
       SELECT
         b.*,
         pp.full_name AS patient_name,
@@ -170,22 +180,68 @@ export const listAppointment = async (req, res) => {
       LEFT JOIN doctor.details d ON b.doctor_id = d.id
       LEFT JOIN "user".profile dp ON d.account_id = dp.account_id
       LEFT JOIN auth.accounts da ON dp.account_id = da.id
-      ORDER BY b.appointment_date ASC
-      `
-    );
+    `;
 
-    if (bookings.rowCount === 0) {
+    const params = [];
+    const conditions = [];
+
+    if (date) {
+      if (date === "today") {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+        conditions.push(
+          `b.appointment_date BETWEEN $${params.length + 1} AND $${
+            params.length + 2
+          }`
+        );
+        params.push(startOfDay, endOfDay);
+      } else {
+        conditions.push(`b.appointment_date::date = $${params.length + 1}`);
+        params.push(date);
+      }
+    }
+
+    if (search) {
+      conditions.push(`(
+        dp.full_name ILIKE $${params.length + 1} OR
+        pp.full_name ILIKE $${params.length + 1} OR
+        b.note ILIKE $${params.length + 1}
+      )`);
+      params.push(`%${search}%`);
+    }
+
+    if (status) {
+      conditions.push(`b.status = $${params.length + 1}`);
+      params.push(status);
+    }
+
+    if (role === "doctor") {
+      conditions.push(`b.paymentStatus = $${params.length + 1}`);
+      params.push("paid");
+    }
+
+    if (conditions.length > 0) {
+      query += " WHERE " + conditions.join(" AND ");
+    }
+
+    query += " ORDER BY b.appointment_date ASC";
+
+    const result = await pool.query(query, params);
+
+    if (result.rowCount === 0) {
       return res.status(200).json({
         success: true,
-        message: "No bookings found",
-        bookings: [],
+        message: "No appointments found",
+        appointments: [],
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "All bookings",
-      bookings: bookings.rows,
+      message: "Appointments fetched successfully",
+      appointments: result.rows,
     });
   } catch (error) {
     console.error("❌ Error fetching appointments:", error);
@@ -196,92 +252,59 @@ export const listAppointment = async (req, res) => {
   }
 };
 
-// Today's appointments
-export const todaysAppointments = async (req, res) => {
-  try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
+export const payForAppointment = [
+  param("appointment_id")
+    .isInt({ min: 1 })
+    .withMessage("Invalid appointment ID"),
 
-    const result = await pool.query(
-      `
-      SELECT
-        b.*,
-        pp.full_name AS patient_name,
-        pp.phone_number AS patient_phone,
-        pp.date_of_birth AS patient_dob,
-        pp.medical_condition AS patient_medical_condition,
-        pp.current_medication AS patient_current_medication,
-        pp.known_allergies AS patient_known_allergies,
-        pa.email AS patient_email,
-        d.id AS doctor_id,
-        dp.full_name AS doctor_name,
-        da.email AS doctor_email
-      FROM appointment.bookings b
-      LEFT JOIN "user".profile pp ON b.profile_id = pp.id
-      LEFT JOIN auth.accounts pa ON pp.account_id = pa.id
-      LEFT JOIN doctor.details d ON b.doctor_id = d.id
-      LEFT JOIN "user".profile dp ON d.account_id = dp.account_id
-      LEFT JOIN auth.accounts da ON dp.account_id = da.id
-      WHERE b.appointment_date BETWEEN $1 AND $2
-      ORDER BY b.appointment_date ASC
-      `,
-      [startOfDay, endOfDay]
-    );
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: errors.array()[0].msg,
+      });
+    }
 
-    return res.status(200).json({ success: true, appointments: result.rows });
-  } catch (error) {
-    console.error("❌ Error fetching today's appointments:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal server error" });
-  }
-};
+    const { appointment_id } = req.params;
 
-export const searchAppointments = async (req, res) => {
-  const { query } = req;
+    try {
+      // Check if appointment exists
+      const appointment = await pool.query(
+        `SELECT * FROM appointment.bookings WHERE id = $1`,
+        [appointment_id]
+      );
 
-  try {
-    const result = await pool.query(
-      `
-      SELECT
-        b.*,
-        pp.full_name AS patient_name,
-        pp.phone_number AS patient_phone,
-        pp.date_of_birth AS patient_dob,
-        pp.medical_condition AS patient_medical_condition,
-        pp.current_medication AS patient_current_medication,
-        pp.known_allergies AS patient_known_allergies,
-        pa.email AS patient_email,
-        d.id AS doctor_id,
-        dp.full_name AS doctor_name,
-        da.email AS doctor_email
-      FROM appointment.bookings b
-      LEFT JOIN "user".profile pp ON b.profile_id = pp.id
-      LEFT JOIN auth.accounts pa ON pp.account_id = pa.id
-      LEFT JOIN doctor.details d ON b.doctor_id = d.id
-      LEFT JOIN "user".profile dp ON d.account_id = dp.account_id
-      LEFT JOIN auth.accounts da ON dp.account_id = da.id
-      WHERE b.appointment_date::date = CURRENT_DATE
-      AND (
-        dp.full_name ILIKE $1 OR
-        pp.full_name ILIKE $1 OR
-        b.note ILIKE $1
-      )
-      ORDER BY b.appointment_date ASC
-      `,
-      [`%${query.q}%`]
-    );
+      if (appointment.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Appointment not found",
+        });
+      }
 
-    return res.status(200).json({ success: true, appointments: result.rows });
-  } catch (error) {
-    console.error("❌ Error searching appointments:", error);
-    return res
-      .status(500)
-      .json({ success: false, message: "Internal server error" });
-  }
-};
+      // Update paymentStatus to 'paid'
+      const result = await pool.query(
+        `UPDATE appointment.bookings
+         SET paymentStatus = 'paid'
+         WHERE id = $1
+         RETURNING *`,
+        [appointment_id]
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment processed successfully",
+        appointment: result.rows[0],
+      });
+    } catch (error) {
+      console.error("❌ Error processing payment:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+];
 
 // cancel appointment
 export const cancelAppointment = [
@@ -345,7 +368,8 @@ export const rescheduleAppointment = [
   body("new_date")
     .notEmpty()
     .withMessage("New appointment date is required")
-    .isDate(),
+    .isISO8601()
+    .toDate(),
 
   async (req, res) => {
     const errors = validationResult(req);

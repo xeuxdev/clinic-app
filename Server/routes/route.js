@@ -4,12 +4,11 @@ import {
   cancelAppointment,
   completeAppointment,
   getAppointmentById,
-  listAppointment,
+  getAppointments,
+  payForAppointment,
   rescheduleAppointment,
   saveConsultation,
-  searchAppointments,
   startAppointment,
-  todaysAppointments,
 } from "../controller/appointment.controller.js";
 import {
   patientRegister,
@@ -17,6 +16,7 @@ import {
   userRegister,
 } from "../controller/auth.controller.js";
 import {
+  getConsultationById,
   getDoctorById,
   getDoctors,
   getPatients,
@@ -43,7 +43,7 @@ appointmentRoute.get(
   "/appointment/get-appointments",
   verifySession,
   verifyRole,
-  listAppointment
+  getAppointments
 );
 
 appointmentRoute.get(
@@ -53,20 +53,7 @@ appointmentRoute.get(
   getAppointmentById
 );
 
-// Today's appointments
-appointmentRoute.get(
-  "/appointment/today",
-  verifySession,
-  verifyRole,
-  todaysAppointments
-);
-appointmentRoute.get(
-  "/appointment/search",
-  verifySession,
-  verifyRole,
-  searchAppointments
-);
-appointmentRoute.post(
+appointmentRoute.put(
   "/appointment/cancel/:appointment_id",
   verifySession,
   verifyRole,
@@ -78,18 +65,11 @@ appointmentRoute.put(
   verifyRole,
   startAppointment
 );
-appointmentRoute.post(
+appointmentRoute.put(
   "/appointment/reschedule/:appointment_id",
   verifySession,
   verifyRole,
   rescheduleAppointment
-);
-
-appointmentRoute.post(
-  "/appointment/consultation",
-  verifySession,
-  verifyRole,
-  saveConsultation
 );
 
 appointmentRoute.put(
@@ -99,9 +79,29 @@ appointmentRoute.put(
   completeAppointment
 );
 
+appointmentRoute.put(
+  "/appointment/pay/:appointment_id",
+  verifySession,
+  verifyRole,
+  payForAppointment
+);
+
+appointmentRoute.post(
+  "/appointment/consultation",
+  verifySession,
+  verifyRole,
+  saveConsultation
+);
+
 // Patient related routes
 export const patientRoute = express.Router();
 patientRoute.get("/patients", verifySession, verifyRole, getPatients);
 patientRoute.get("/patients/search", verifySession, verifyRole, searchPatients);
+patientRoute.get(
+  "/patients/consultation/:id",
+  verifySession,
+  verifyRole,
+  getConsultationById
+);
 patientRoute.get("/doctors", verifySession, verifyRole, getDoctors);
 patientRoute.get("/doctors/:id", verifySession, verifyRole, getDoctorById);

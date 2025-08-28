@@ -99,21 +99,6 @@ const createTables = async () => {
       )
     `);
 
-    // =============== PAYMENT SCHEMA ===============
-    await client.query(`CREATE SCHEMA IF NOT EXISTS payment`);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS payment.transactions (
-        id SERIAL PRIMARY KEY,
-        account_id INT REFERENCES auth.accounts(id) ON DELETE CASCADE,
-        amount NUMERIC(10,2) NOT NULL,
-        currency TEXT NOT NULL DEFAULT 'NGN',
-        status TEXT CHECK (status IN ('pending','success','failed')) NOT NULL,
-        payment_method TEXT,
-        reference TEXT UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT now()
-      )
-    `);
-
     // =============== APPOINTMENT SCHEMA ===============
     await client.query(`CREATE SCHEMA IF NOT EXISTS appointment`);
     await client.query(`
@@ -123,6 +108,8 @@ const createTables = async () => {
         doctor_id INT REFERENCES doctor.details(id) ON DELETE SET NULL,
         appointment_date TIMESTAMP NOT NULL,
         note TEXT,
+        paymentStatus VARCHAR(20) DEFAULT 'pending'
+          CHECK (paymentStatus IN ('pending', 'paid')),
         status VARCHAR(20) DEFAULT 'booked'
           CHECK (status IN ('booked', 'cancelled', 'rescheduled', 'in_progress', 'completed')),
         created_at TIMESTAMP DEFAULT NOW(),
