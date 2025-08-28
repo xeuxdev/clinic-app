@@ -82,6 +82,7 @@ export interface RegisterResponse extends ApiResponse {
 
 export interface LoginResponse extends ApiResponse {
   user: User;
+  token: string;
 }
 
 export interface DoctorReceptionistResponse extends ApiResponse {

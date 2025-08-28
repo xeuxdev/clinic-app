@@ -11,6 +11,8 @@ import type {
   RegisterResponse,
   RegisterUserPayload,
 } from "./types";
+import Cookies from "js-cookie";
+import { siteConfig } from "~/lib/site";
 
 // Auth hooks
 export function useSignUp() {
@@ -67,8 +69,18 @@ export function useLogin() {
         payload,
       });
     },
-    onSuccess: ({ user }) => {
+    onSuccess: (data) => {
       showSuccessToast("Login successful!", "Welcome back");
+      const { user, token } = data;
+
+      // Store token and user ID in cookies
+      Cookies.set(siteConfig.cookieNames.session, data.token, {
+        expires: 7, // 7 days
+      });
+
+      Cookies.set(siteConfig.cookieNames.user, data.user.id, {
+        expires: 7, // 7 days
+      });
 
       setUser({
         userId: Number(user.id),

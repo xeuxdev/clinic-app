@@ -1,11 +1,8 @@
-import { body, param, validationResult } from "express-validator";
-import { pool } from "../db/init_db.js";
 import bcrypt from "bcrypt";
+import { body, validationResult } from "express-validator";
+import jwt from "jsonwebtoken";
+import { pool } from "../db/init_db.js";
 import { generateOTP } from "../util/generateCode.js";
-import { generateRandomToken } from "../util/generateRandomToken.js";
-import { setSession } from "../util/setSession.js";
-import { sendEmail } from "../mail/email.config.js";
-import { emailTemplates } from "../mail/templates.js";
 
 export const userLogin = [
   // Validation rules
@@ -59,7 +56,15 @@ export const userLogin = [
       );
 
       // res was not passed here previously
-      setSession(res, loggedInUser.rows[0].id);
+      // setSession(res, loggedInUser.rows[0].id);
+      const token = jwt.sign(
+        { userId: loggedInUser.rows[0].id },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: "2d",
+        }
+      );
+
       res.status(200).json({
         success: true,
         message: "User logged in",
@@ -67,6 +72,7 @@ export const userLogin = [
           ...loggedInUser.rows[0],
           role: userResult.rows[0].role,
         },
+        token: token,
       });
     } catch (error) {
       console.error("Error trying to login user:", error.message);
@@ -77,6 +83,7 @@ export const userLogin = [
     }
   },
 ];
+
 export const patientRegister = [
   // validation rules
   body("email")

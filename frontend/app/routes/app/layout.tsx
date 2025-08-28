@@ -3,6 +3,7 @@ import { AppSidebar } from "~/components/sidebar/app-sidebar";
 import SidebarHeader from "~/components/sidebar/sidebar-header";
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
 import type { Route } from "./+types/layout";
+import { siteConfig } from "~/lib/site";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const cookieHeader = request.headers.get("Cookie");
@@ -10,7 +11,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     cookieHeader?.split("; ").map((c) => c.split("=")) || []
   );
 
-  if (!cookie["HealthCare_session"]) {
+  if (!cookie[siteConfig.cookieNames.session]) {
     return redirect("/auth/login");
   }
 }
