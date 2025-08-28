@@ -1,11 +1,14 @@
 import { redirect } from "react-router";
 import type { Route } from "./+types/logout";
+import { siteConfig } from "~/lib/site";
 
 export async function loader({ request }: Route.LoaderArgs) {
   return redirect("/", {
     headers: {
       "Set-Cookie": [
-        "HealthCare_session" +
+        siteConfig.cookieNames.session +
+          "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly",
+        siteConfig.cookieNames.user +
           "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly",
       ].join(", "),
     },
