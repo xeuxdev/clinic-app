@@ -35,18 +35,37 @@ const clearTables = async (client) => {
 const createAccount = async (client, email, password, role = "patient") => {
   const hashed = await bcrypt.hash(password, SALT_ROUNDS);
   const res = await client.query(
-    `INSERT INTO auth.accounts (email, password, role, isVerified, created_at, updated_at)
-     VALUES ($1,$2,$3, true, NOW(), NOW()) RETURNING id`,
+    `INSERT INTO auth.accounts (email, password, role, isVerified, accountStatus, created_at, updated_at)
+     VALUES ($1,$2,$3, true, 'active', NOW(), NOW()) RETURNING id`,
     [email, hashed, role]
   );
   return res.rows[0].id;
 };
 
-const createProfile = async (client, accountId, fullName, phone, dob) => {
+const createProfile = async (
+  client,
+  accountId,
+  fullName,
+  phone,
+  dob,
+  bloodGroup = null,
+  medicalCondition = null,
+  currentMedication = null,
+  knownAllergies = null
+) => {
   const res = await client.query(
-    `INSERT INTO "user".profile (account_id, full_name, phone_number, date_of_birth, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,NOW(),NOW()) RETURNING id`,
-    [accountId, fullName, phone, dob]
+    `INSERT INTO "user".profile (account_id, full_name, phone_number, date_of_birth, blood_group, medical_condition, current_medication, known_allergies, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()) RETURNING id`,
+    [
+      accountId,
+      fullName,
+      phone,
+      dob,
+      bloodGroup,
+      medicalCondition,
+      currentMedication,
+      knownAllergies,
+    ]
   );
   return res.rows[0].id;
 };
@@ -79,6 +98,21 @@ const createAppointment = async (
     `INSERT INTO appointment.bookings (profile_id, doctor_id, appointment_date, note, paymentStatus, status, created_at, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING id`,
     [profileId, doctorId, appointmentDate, note, paymentStatus, status]
+  );
+  return res.rows[0].id;
+};
+
+const createConsultation = async (
+  client,
+  appointmentId,
+  notes,
+  prescriptions,
+  recommendations
+) => {
+  const res = await client.query(
+    `INSERT INTO consultation.records (appointment_id, notes, prescriptions, recommendations, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,NOW(),NOW()) RETURNING id`,
+    [appointmentId, notes, prescriptions, recommendations]
   );
   return res.rows[0].id;
 };
@@ -144,7 +178,11 @@ const seed = async () => {
         accId,
         d.name,
         `080${1000000 + i}`,
-        `1975-01-0${i + 1}`
+        `1975-01-0${i + 1}`,
+        "O+",
+        "None",
+        "None",
+        "None"
       );
       doctorProfileIds.push(profileId);
       const docId = await createDoctorDetails(
@@ -193,7 +231,11 @@ const seed = async () => {
         accId,
         a.name,
         a.phone,
-        null
+        null,
+        "A+",
+        "None",
+        "None",
+        "None"
       );
       attendantProfileIds.push(profileId);
     }
@@ -211,7 +253,11 @@ const seed = async () => {
         accId,
         fullName,
         phone,
-        dob
+        dob,
+        ["A+", "B+", "O+", "AB+", "A-", "B-", "O-", "AB-"][i % 8],
+        ["None", "Hypertension", "Diabetes", "Asthma"][i % 4],
+        ["None", "Lisinopril", "Metformin", "Albuterol"][i % 4],
+        ["None", "Penicillin", "Sulfa drugs", "Nuts"][i % 4]
       );
       patients.push({ accountId: accId, profileId, fullName });
     }
@@ -234,7 +280,7 @@ const seed = async () => {
       const note = `Checkup #${i + 1} for ${patient.fullName}`;
       const status = i % 7 === 0 ? "completed" : "booked";
 
-      await createAppointment(
+      const appointmentId = await createAppointment(
         client,
         patient.profileId,
         doctorId,
@@ -242,6 +288,25 @@ const seed = async () => {
         note,
         status
       );
+
+      // Create consultation record for completed appointments
+      if (status === "completed") {
+        const consultationNotes = `Consultation notes for ${
+          patient.fullName
+        } - Checkup #${i + 1}`;
+        const prescriptions = `Prescription for ${
+          patient.fullName
+        } - Medication #${i + 1}`;
+        const recommendations = `Recommendations for ${patient.fullName} - Follow-up in 2 weeks`;
+
+        await createConsultation(
+          client,
+          appointmentId,
+          consultationNotes,
+          prescriptions,
+          recommendations
+        );
+      }
     }
 
     console.log("Seeding complete.");
