@@ -2,24 +2,29 @@ import { Pool } from "pg";
 import dotenv from "dotenv";
 dotenv.config();
 
-const dbName = process.env.DB_NAME || "hospital_db";
+const connectionUrl = process.env.DATABASE_URL;
+const url = new URL(connectionUrl);
+const dbName = url.pathname.slice(1);
+const sslMode = url.searchParams.get("sslmode");
 
 // Pool for checking/creating the database
 const defaultPool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  password: process.env.DB_PASSWORD,
-  port: Number(process.env.DB_PORT) || 5432,
+  user: url.username,
+  host: url.hostname,
+  password: url.password,
+  port: Number(url.port) || 5432,
   database: "postgres",
+  ssl: sslMode === "require",
 });
 
 // Pool for working inside the hospital DB
 export const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  password: process.env.DB_PASSWORD,
-  port: Number(process.env.DB_PORT) || 5432,
+  user: url.username,
+  host: url.hostname,
+  password: url.password,
+  port: Number(url.port) || 5432,
   database: dbName,
+  ssl: sslMode === "require",
 });
 
 // Create the database if it doesn’t exist
