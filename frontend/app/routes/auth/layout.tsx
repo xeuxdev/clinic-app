@@ -21,9 +21,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function AuthLayout() {
   return (
-    <div className="min-h-screen flex">
+    <div className="h-screen flex">
       {/* Left side - Auth forms */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-background">
+      <div className="flex-1 flex items-center justify-center bg-background">
         <div className="w-full max-w-md">
           <Outlet />
         </div>
