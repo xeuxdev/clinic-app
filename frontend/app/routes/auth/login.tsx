@@ -31,7 +31,7 @@ export function meta() {
 }
 
 export default function LoginPage() {
-  const { mutateAsync } = useLogin();
+  const { mutateAsync, isPending } = useLogin();
 
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -113,9 +113,9 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={form.formState.isSubmitting}
+                disabled={form.formState.isSubmitting || isPending}
               >
-                {form.formState.isSubmitting ? "Logging in..." : "Log In"}
+                {isPending ? "Logging in..." : "Log In"}
               </Button>
             </form>
           </Form>
