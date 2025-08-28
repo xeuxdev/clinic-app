@@ -7,7 +7,8 @@
     "start": "node server.js",
     "server": "nodemon server.js",
     "db_setup": "node db/db_setup",
-    "seed": "node db/seed.js"
+    "seed": "node db/seed.js",
+    "build": "npm run db_setup && npm run seed"
   },
   "type": "module",
   "dependencies": {

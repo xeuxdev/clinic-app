@@ -76,9 +76,58 @@ export const getConsultationById = async (req, res) => {
       });
     }
 
+    const consultation = result.rows[0];
+
+    // Fetch appointment info
+    const appointmentResult = await pool.query(
+      `SELECT * FROM appointment.bookings WHERE id = $1`,
+      [id]
+    );
+
+    if (appointmentResult.rowCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    const appointment = appointmentResult.rows[0];
+    const doctorId = appointment.doctor_id;
+    const patientId = appointment.profile_id;
+
+    // Fetch doctor profile
+    const doctorProfileResult = await pool.query(
+      `SELECT * FROM "user".profile WHERE account_id = $1`,
+      [doctorId]
+    );
+
+    const doctorProfile = doctorProfileResult.rows[0] || null;
+
+    // Fetch doctor details
+    const doctorDetailsResult = await pool.query(
+      `SELECT * FROM doctor.details WHERE account_id = $1`,
+      [doctorId]
+    );
+
+    const doctorDetails = doctorDetailsResult.rows;
+
+    // Fetch patient profile
+    const patientProfileResult = await pool.query(
+      `SELECT * FROM "user".profile WHERE account_id = $1`,
+      [patientId]
+    );
+
+    const patientProfile = patientProfileResult.rows[0] || null;
+
     return res.status(200).json({
       success: true,
-      consultation: result.rows[0],
+      consultation,
+      appointmentInfo: appointment,
+      doctorInfo: {
+        profile: doctorProfile,
+        details: doctorDetails,
+      },
+      patientInfo: patientProfile,
     });
   } catch (error) {
     console.error("❌ Error fetching consultation record:", error);
