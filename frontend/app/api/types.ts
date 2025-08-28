@@ -181,6 +181,19 @@ export type GetConsultationNotesResponse = {
     prescriptions: string;
     recommendations: string;
   };
+  appointmentInfo: Appointment;
+  doctorInfo: {
+    profile: Profile;
+    details: Array<{
+      id: number;
+      account_id: number;
+      specialization: string;
+      license_number: string;
+      years_of_experience: number;
+      created_at: string;
+    }>;
+  };
+  patientInfo: Patient;
 };
 
 export type SearchPatientResponse = {

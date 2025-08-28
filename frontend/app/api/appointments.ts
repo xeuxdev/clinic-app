@@ -152,8 +152,12 @@ export function useSaveConsultation() {
         "Consultation saved!",
         "Your consultation notes have been successfully saved"
       );
+      // Invalidate both appointment and patient notes queries
       queryClient.invalidateQueries({
         queryKey: ["appointment", variables.appointment_id],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["patients", "notes", variables.appointment_id],
       });
     },
     onError: (error) => {

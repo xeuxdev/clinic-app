@@ -37,15 +37,18 @@ export function useSearchPatients(query?: string) {
   });
 }
 
-export function useViewPatientsNotes(patientId: string | number) {
+export function useViewPatientsNotes(
+  patientId: string | number,
+  isOpen: boolean
+) {
   return useQuery({
     queryKey: ["patients", "notes", patientId],
     queryFn: async () => {
       const res = await getRequest<GetConsultationNotesResponse>({
         url: API_ENDPOINTS.PATIENTS.CONSULTATION_NOTES(patientId),
       });
-      return res?.consultation ?? [];
+      return res;
     },
-    enabled: !!patientId,
+    enabled: !!patientId && isOpen,
   });
 }
