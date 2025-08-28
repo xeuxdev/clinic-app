@@ -63,6 +63,9 @@ export const addAppointment = [
           pp.full_name AS patient_name,
           pp.phone_number AS patient_phone,
           pp.date_of_birth AS patient_dob,
+          pp.medical_condition AS patient_medical_condition,
+          pp.current_medication AS patient_current_medication,
+          pp.known_allergies AS patient_known_allergies,
           pa.email AS patient_email,
           d.id AS doctor_id,
           dp.full_name AS doctor_name,
@@ -105,11 +108,14 @@ export const getAppointmentById = async (req, res) => {
         b.*,
         pp.full_name AS patient_name,
         pp.phone_number AS patient_phone,
-  pp.date_of_birth AS patient_dob,
-  pa.email AS patient_email,
+        pp.date_of_birth AS patient_dob,
+        pp.medical_condition AS patient_medical_condition,
+        pp.current_medication AS patient_current_medication,
+        pp.known_allergies AS patient_known_allergies,
+        pa.email AS patient_email,
         d.id AS doctor_id,
         dp.full_name AS doctor_name,
-  da.email AS doctor_email
+        da.email AS doctor_email
       FROM appointment.bookings b
       LEFT JOIN "user".profile pp ON b.profile_id = pp.id
       LEFT JOIN auth.accounts pa ON pp.account_id = pa.id
@@ -148,18 +154,21 @@ export const listAppointment = async (req, res) => {
       `
       SELECT
         b.*,
-      pp.full_name AS patient_name,
-  pp.phone_number AS patient_phone,
-  pp.date_of_birth AS patient_dob,
-  pa.email AS patient_email,
+        pp.full_name AS patient_name,
+        pp.phone_number AS patient_phone,
+        pp.date_of_birth AS patient_dob,
+        pp.medical_condition AS patient_medical_condition,
+        pp.current_medication AS patient_current_medication,
+        pp.known_allergies AS patient_known_allergies,
+        pa.email AS patient_email,
         d.id AS doctor_id,
         dp.full_name AS doctor_name,
-  da.email AS doctor_email
+        da.email AS doctor_email
       FROM appointment.bookings b
       LEFT JOIN "user".profile pp ON b.profile_id = pp.id
       LEFT JOIN auth.accounts pa ON pp.account_id = pa.id
       LEFT JOIN doctor.details d ON b.doctor_id = d.id
-  LEFT JOIN "user".profile dp ON d.account_id = dp.account_id
+      LEFT JOIN "user".profile dp ON d.account_id = dp.account_id
       LEFT JOIN auth.accounts da ON dp.account_id = da.id
       ORDER BY b.appointment_date ASC
       `
@@ -200,8 +209,11 @@ export const todaysAppointments = async (req, res) => {
       SELECT
         b.*,
         pp.full_name AS patient_name,
-          pp.phone_number AS patient_phone,
+        pp.phone_number AS patient_phone,
         pp.date_of_birth AS patient_dob,
+        pp.medical_condition AS patient_medical_condition,
+        pp.current_medication AS patient_current_medication,
+        pp.known_allergies AS patient_known_allergies,
         pa.email AS patient_email,
         d.id AS doctor_id,
         dp.full_name AS doctor_name,
@@ -236,8 +248,11 @@ export const searchAppointments = async (req, res) => {
       SELECT
         b.*,
         pp.full_name AS patient_name,
-          pp.phone_number AS patient_phone,
+        pp.phone_number AS patient_phone,
         pp.date_of_birth AS patient_dob,
+        pp.medical_condition AS patient_medical_condition,
+        pp.current_medication AS patient_current_medication,
+        pp.known_allergies AS patient_known_allergies,
         pa.email AS patient_email,
         d.id AS doctor_id,
         dp.full_name AS doctor_name,
@@ -381,9 +396,7 @@ export const rescheduleAppointment = [
 
 //  Mark Appointment In-Progress
 export const startAppointment = [
-  param("appointment_id")
-    .isInt({ min: 1 })
-    .withMessage("Invalid appointment ID"),
+  param("id").isInt({ min: 1 }).withMessage("Invalid appointment ID"),
 
   async (req, res) => {
     const errors = validationResult(req);
@@ -394,7 +407,7 @@ export const startAppointment = [
       });
     }
 
-    const { appointment_id } = req.params;
+    const { id } = req.params;
 
     try {
       const result = await pool.query(
@@ -402,7 +415,7 @@ export const startAppointment = [
          SET status = 'in_progress'
          WHERE id = $1
          RETURNING *`,
-        [appointment_id]
+        [id]
       );
 
       if (result.rowCount === 0) {
@@ -467,6 +480,101 @@ export const completeAppointment = [
       });
     } catch (error) {
       console.error("❌ Error completing appointment:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+      });
+    }
+  },
+];
+
+export const saveConsultation = [
+  body("appointment_id")
+    .notEmpty()
+    .withMessage("Appointment ID is required")
+    .isInt({ min: 1 })
+    .toInt(),
+  body("notes").optional().trim().escape(),
+  body("prescriptions").optional().trim().escape(),
+  body("recommendations").optional().trim().escape(),
+
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: errors.array()[0].msg,
+      });
+    }
+
+    const { appointment_id, notes, prescriptions, recommendations } = req.body;
+
+    try {
+      // Check if appointment exists
+      const appointment = await pool.query(
+        `SELECT * FROM appointment.bookings WHERE id = $1`,
+        [appointment_id]
+      );
+
+      if (appointment.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Appointment not found",
+        });
+      }
+
+      // Check if a consultation record already exists for this appointment
+      const existing = await pool.query(
+        `SELECT * FROM consultation.records WHERE appointment_id = $1`,
+        [appointment_id]
+      );
+
+      if (existing.rowCount > 0) {
+        // Update existing consultation record
+        const updated = await pool.query(
+          `UPDATE consultation.records
+           SET notes = $1,
+               prescriptions = $2,
+               recommendations = $3,
+               updated_at = NOW()
+           WHERE appointment_id = $4
+           RETURNING *`,
+          [
+            notes || null,
+            prescriptions || null,
+            recommendations || null,
+            appointment_id,
+          ]
+        );
+
+        return res.status(200).json({
+          success: true,
+          message: "Consultation record updated successfully",
+          consultation: updated.rows[0],
+        });
+      }
+
+      // Save new consultation record
+      const record = await pool.query(
+        `INSERT INTO consultation.records
+          (appointment_id, notes, prescriptions, recommendations)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [
+          appointment_id,
+          notes || null,
+          prescriptions || null,
+          recommendations || null,
+        ]
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "Consultation record saved successfully",
+        consultation: record.rows[0],
+      });
+    } catch (error) {
+      console.error("❌ Error saving consultation record:", error);
       return res.status(500).json({
         success: false,
         message: "Internal server error",

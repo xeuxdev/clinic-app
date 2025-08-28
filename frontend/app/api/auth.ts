@@ -12,22 +12,6 @@ import type {
   RegisterUserPayload,
 } from "./types";
 
-export interface PatientRegisterPayload {
-  name: string;
-  email: string;
-  password: string;
-  phone?: string;
-}
-
-export interface ChangePasswordPayload {
-  oldPassword: string;
-  newPassword: string;
-}
-
-export interface RequestPasswordResetPayload {
-  email: string;
-}
-
 // Auth hooks
 export function useSignUp() {
   const queryClient = useQueryClient();

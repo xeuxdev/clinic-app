@@ -113,16 +113,19 @@ export interface Appointment {
   profile_id: number;
   doctor_id: number;
   appointment_date: string;
-  note?: string | null;
+  note: string | null;
   created_at: string;
   updated_at: string;
   patient_name: string;
   patient_phone: string;
-  patient_email: string;
-  patient_dob: string;
+  patient_dob: string | null;
+  patient_medical_condition: string | null;
+  patient_current_medication: string | null;
+  patient_known_allergies: string | null;
+  patient_email: string | null;
   doctor_name: string;
   doctor_email: string;
-  status: "booked" | "cancelled" | "in_progress" | "completed" | "rescheduled";
+  status: "booked" | "in_progress" | "cancelled" | "completed" | "rescheduled";
 }
 
 export interface AppointmentResponse extends ApiResponse {
@@ -139,6 +142,15 @@ export interface TodaysAppointmentResponse extends ApiResponse {
 export interface AppointmentStatusResponse extends ApiResponse {
   data: Appointment;
 }
+
+export type SaveConsultationPayload = {
+  appointment_id: number;
+  notes: string;
+  prescriptions: string;
+  recommendations: string;
+};
+
+export type SaveConsultationResponse = ApiResponse & {};
 
 export interface Patient {
   account_id: number;

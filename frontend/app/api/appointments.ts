@@ -12,6 +12,8 @@ import type {
   AppointmentResponse,
   AppointmentsListResponse,
   RescheduleAppointmentPayload,
+  SaveConsultationPayload,
+  SaveConsultationResponse,
   TodaysAppointmentResponse,
 } from "./types";
 
@@ -90,8 +92,8 @@ export function useSearchAppointments(query: string) {
 export function useStartAppointment() {
   const queryClient = useQueryClient();
 
-  return useMutation<any, Error, string | number>({
-    mutationFn: async (appointmentId) => {
+  return useMutation({
+    mutationFn: async (appointmentId: string | number) => {
       return putRequest({
         url: API_ENDPOINTS.APPOINTMENTS.START(appointmentId),
         payload: {},
@@ -104,12 +106,66 @@ export function useStartAppointment() {
         "The appointment has been marked as started"
       );
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      queryClient.invalidateQueries({ queryKey: ["todays-appointments"] });
       queryClient.invalidateQueries({
         queryKey: ["appointment", appointmentId],
       });
     },
     onError: (error) => {
       console.error("Failed to start appointment:", error);
+      displayErrorMessage(error);
+    },
+  });
+}
+
+export function useSaveConsultation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: SaveConsultationPayload) => {
+      return postRequest<SaveConsultationResponse, SaveConsultationPayload>({
+        url: API_ENDPOINTS.APPOINTMENTS.SAVE_CONSULTATION,
+        payload,
+      });
+    },
+    onSuccess: (data) => {
+      console.log("Consultation saved successfully:", data);
+      showSuccessToast(
+        "Consultation saved!",
+        "Your consultation notes have been successfully saved"
+      );
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+    },
+    onError: (error) => {
+      console.error("Failed to save consultation:", error);
+      displayErrorMessage(error);
+    },
+  });
+}
+
+export function useCompleteAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (appointmentId: string | number) => {
+      return putRequest({
+        url: API_ENDPOINTS.APPOINTMENTS.COMPLETE(appointmentId),
+        payload: {},
+      });
+    },
+    onSuccess: (data, appointmentId) => {
+      console.log("Appointment completed successfully:", data);
+      showSuccessToast(
+        "Appointment completed!",
+        "The appointment has been marked as completed"
+      );
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      queryClient.invalidateQueries({
+        queryKey: ["appointment", appointmentId],
+      });
+    },
+    onError: (error) => {
+      console.error("Failed to complete appointment:", error);
       displayErrorMessage(error);
     },
   });
@@ -149,57 +205,29 @@ export function useRescheduleAppointment() {
   });
 }
 
-export function useCancelAppointment() {
-  const queryClient = useQueryClient();
+// export function useCancelAppointment() {
+//   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (appointmentId: string | number) => {
-      return deleteRequest({
-        url: API_ENDPOINTS.APPOINTMENTS.CANCEL(appointmentId),
-      });
-    },
-    onSuccess: (data, appointmentId) => {
-      console.log("Appointment cancelled successfully:", data);
-      showSuccessToast(
-        "Appointment cancelled",
-        "Your appointment has been cancelled"
-      );
-      queryClient.invalidateQueries({ queryKey: ["appointments"] });
-      queryClient.invalidateQueries({
-        queryKey: ["appointment", appointmentId],
-      });
-    },
-    onError: (error) => {
-      console.error("Failed to cancel appointment:", error);
-      displayErrorMessage(error);
-    },
-  });
-}
-
-export function useCompleteAppointment() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (appointmentId: string | number) => {
-      return putRequest({
-        url: API_ENDPOINTS.APPOINTMENTS.COMPLETE(appointmentId),
-        payload: {},
-      });
-    },
-    onSuccess: (data, appointmentId) => {
-      console.log("Appointment completed successfully:", data);
-      showSuccessToast(
-        "Appointment completed!",
-        "The appointment has been marked as completed"
-      );
-      queryClient.invalidateQueries({ queryKey: ["appointments"] });
-      queryClient.invalidateQueries({
-        queryKey: ["appointment", appointmentId],
-      });
-    },
-    onError: (error) => {
-      console.error("Failed to complete appointment:", error);
-      displayErrorMessage(error);
-    },
-  });
-}
+//   return useMutation({
+//     mutationFn: async (appointmentId: string | number) => {
+//       return postre({
+//         url: API_ENDPOINTS.APPOINTMENTS.CANCEL(appointmentId),
+//       });
+//     },
+//     onSuccess: (data, appointmentId) => {
+//       console.log("Appointment cancelled successfully:", data);
+//       showSuccessToast(
+//         "Appointment cancelled",
+//         "Your appointment has been cancelled"
+//       );
+//       queryClient.invalidateQueries({ queryKey: ["appointments"] });
+//       queryClient.invalidateQueries({
+//         queryKey: ["appointment", appointmentId],
+//       });
+//     },
+//     onError: (error) => {
+//       console.error("Failed to cancel appointment:", error);
+//       displayErrorMessage(error);
+//     },
+//   });
+// }

@@ -6,6 +6,7 @@ import {
   getAppointmentById,
   listAppointment,
   rescheduleAppointment,
+  saveConsultation,
   searchAppointments,
   startAppointment,
   todaysAppointments,
@@ -71,8 +72,8 @@ appointmentRoute.post(
   verifyRole,
   cancelAppointment
 );
-appointmentRoute.post(
-  "/appointment/in_progress/:appointment_id",
+appointmentRoute.put(
+  "/appointment/start/:id",
   verifySession,
   verifyRole,
   startAppointment
@@ -83,7 +84,15 @@ appointmentRoute.post(
   verifyRole,
   rescheduleAppointment
 );
+
 appointmentRoute.post(
+  "/appointment/consultation",
+  verifySession,
+  verifyRole,
+  saveConsultation
+);
+
+appointmentRoute.put(
   "/appointment/complete/:appointment_id",
   verifySession,
   verifyRole,

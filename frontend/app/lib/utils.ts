@@ -98,7 +98,8 @@ export function formatDateTime(dateString: string | Date) {
   });
 }
 
-export function calculateAge(dob: string | Date) {
+export function calculateAge(dob: string | null) {
+  if (!dob) return "N/A";
   const birthDate = new Date(dob);
   const ageDiff = Date.now() - birthDate.getTime();
   const ageDate = new Date(ageDiff);

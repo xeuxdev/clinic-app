@@ -61,6 +61,8 @@ const patientSchema = z.object({
       message: "Blood group is required",
     }
   ),
+  currentMedication: z.string().min(1, "Current medication is required"),
+  knownAllergies: z.string().min(1, "Known allergies is required"),
 });
 
 type PatientFormData = z.infer<typeof patientSchema>;
@@ -80,6 +82,8 @@ export default function RegisterPatient() {
       address: "",
       medicalHistory: "",
       bloodGroup: "O+",
+      currentMedication: "",
+      knownAllergies: "",
     },
   });
 
@@ -95,6 +99,8 @@ export default function RegisterPatient() {
       date_of_birth: data.dateOfBirth,
       blood_group: data.bloodGroup,
       medical_condition: data.medicalHistory || undefined,
+      current_medication: data.currentMedication,
+      known_allergies: data.knownAllergies,
       role: "patient" as const,
     };
 
@@ -274,6 +280,50 @@ export default function RegisterPatient() {
                         Include any known allergies, previous surgeries, chronic
                         conditions, or current medications
                       </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Current Medication */}
+                <FormField
+                  control={form.control}
+                  name="currentMedication"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        Current Medication
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Enter current medications if any"
+                          rows={3}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Known Allergies */}
+                <FormField
+                  control={form.control}
+                  name="knownAllergies"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        Known Allergies
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Enter known allergies if any"
+                          rows={3}
+                          {...field}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

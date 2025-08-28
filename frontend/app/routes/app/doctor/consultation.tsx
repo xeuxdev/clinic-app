@@ -1,28 +1,45 @@
-import { useState, useEffect } from "react";
-import { Link, useParams, useNavigate } from "react-router";
 import {
+  AlertCircle,
   ArrowLeft,
-  User,
-  Clock,
-  Save,
+  CheckCircle,
   FileText,
   Pill,
-  AlertCircle,
-  CheckCircle,
   Play,
-  Pause,
+  Save,
+  User,
 } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router";
+import {
+  useGetAppointmentById,
+  useStartAppointment,
+  useCompleteAppointment,
+  useSaveConsultation,
+} from "~/api/appointments";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
-import { Badge } from "~/components/ui/badge";
-import { Separator } from "~/components/ui/separator";
-import { useGetAppointmentById } from "~/api/appointments";
-import type { Appointment } from "~/api/types";
-import { toast } from "sonner";
-import { calculateAge, formatDate } from "~/lib/utils";
+import { Label } from "~/components/ui/label";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormField,
+  FormMessage,
+} from "~/components/ui/form";
+import {
+  calculateAge,
+  formatDate,
+  formatTime,
+  showSuccessToast,
+  showErrorToast,
+} from "~/lib/utils";
 
 export function meta() {
   return [
@@ -34,47 +51,49 @@ export function meta() {
   ];
 }
 
-interface ConsultationFormData {
-  notes: string;
-  prescriptions: string[];
-  recommendations: string;
-  currentPrescription: string;
-}
+const consultationSchema = z.object({
+  notes: z
+    .string()
+    .min(1, "Clinical notes are required")
+    .min(10, "Clinical notes must be at least 10 characters"),
+  recommendations: z.string().optional(),
+});
+
+type ConsultationFormData = z.infer<typeof consultationSchema>;
 
 export default function PatientConsultation() {
   const { id } = useParams();
-  const navigate = useNavigate();
 
-  const [consultationStatus, setConsultationStatus] = useState<
-    "not-started" | "in-progress" | "completed"
-  >("not-started");
-  const [startTime, setStartTime] = useState<string | null>(null);
-  const [endTime, setEndTime] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-
-  const [formData, setFormData] = useState<ConsultationFormData>({
-    notes: "",
-    prescriptions: [],
-    recommendations: "",
-    currentPrescription: "",
-  });
+  const { mutateAsync: startAppointment, isPending: isStarting } =
+    useStartAppointment();
+  const { mutateAsync: completeAppointment, isPending: isCompleting } =
+    useCompleteAppointment();
+  const { mutateAsync: saveConsultation, isPending: isSaving } =
+    useSaveConsultation();
 
   // Fetch appointment from API
-  const appointmentQuery = useGetAppointmentById(id!);
-  const apiAppointment: Appointment | undefined =
-    appointmentQuery.data?.appointment;
+  const {
+    data: appointmentInfo,
+    isLoading,
+    refetch,
+  } = useGetAppointmentById(id!);
 
-  useEffect(() => {
-    if (!apiAppointment) return;
-    // derive consultation status from appointment status
-    if (apiAppointment.status === "in_progress")
-      setConsultationStatus("in-progress");
-    else if (apiAppointment.status === "completed")
-      setConsultationStatus("completed");
-    else setConsultationStatus("not-started");
-  }, [apiAppointment]);
+  // use react-hook-form for notes and recommendations
+  const form = useForm<ConsultationFormData>({
+    resolver: zodResolver(consultationSchema),
+    defaultValues: {
+      notes: "",
+      recommendations: "",
+    },
+  });
 
-  if (appointmentQuery.isLoading) {
+  const watchedNotes = form.watch("notes");
+
+  // keep prescriptions in local state for add/remove UI
+  const [prescriptions, setPrescriptions] = useState<string[]>([]);
+  const [currentPrescription, setCurrentPrescription] = useState("");
+
+  if (isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center text-gray-600">Loading appointment...</div>
@@ -82,7 +101,7 @@ export default function PatientConsultation() {
     );
   }
 
-  if (!apiAppointment) {
+  if (!appointmentInfo) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
@@ -99,113 +118,69 @@ export default function PatientConsultation() {
     );
   }
 
-  // Map API appointment to local shapes used by the UI
-  const appointment = apiAppointment;
-  const apptDate = new Date(appointment.appointment_date);
   const patient = {
-    name: appointment.patient_name,
-    age: calculateAge(appointment.patient_dob),
-    phone: appointment.patient_phone,
-    email: appointment.patient_email,
-    address: "N/A",
-    medicalHistory: undefined,
-  } as const;
-  const doctor = {
-    name: appointment.doctor_name ?? "Doctor",
+    name: appointmentInfo.appointment.patient_name,
+    age: calculateAge(appointmentInfo.appointment.patient_dob),
+    phone: appointmentInfo.appointment.patient_phone,
+    email: appointmentInfo.appointment.patient_email,
+    dateOfBirth: appointmentInfo.appointment.patient_dob,
+    medicalCondition: appointmentInfo.appointment.patient_medical_condition,
+    currentMedication: appointmentInfo.appointment.patient_current_medication,
+    knownAllergies: appointmentInfo.appointment.patient_known_allergies,
   };
 
   const handleStartConsultation = () => {
-    const now = new Date();
-    const timeString = `${now.getHours().toString().padStart(2, "0")}:${now
-      .getMinutes()
-      .toString()
-      .padStart(2, "0")}`;
-    setStartTime(timeString);
-    setConsultationStatus("in-progress");
-    toast.success("Consultation started");
+    startAppointment(appointmentInfo.appointment.id).then(() => {
+      refetch();
+    });
   };
 
   const handleAddPrescription = () => {
-    if (formData.currentPrescription.trim()) {
-      setFormData((prev) => ({
-        ...prev,
-        prescriptions: [...prev.prescriptions, prev.currentPrescription.trim()],
-        currentPrescription: "",
-      }));
+    if (currentPrescription.trim()) {
+      setPrescriptions((prev) => [...prev, currentPrescription.trim()]);
+      setCurrentPrescription("");
     }
   };
 
   const handleRemovePrescription = (index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      prescriptions: prev.prescriptions.filter((_, i) => i !== index),
-    }));
+    setPrescriptions((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSaveNotes = async () => {
-    setIsSaving(true);
+  const handleSaveNotes = (data: ConsultationFormData) => {
+    const payload = {
+      appointment_id: appointmentInfo.appointment.id,
+      notes: data.notes,
+      prescriptions: prescriptions.join("\n"),
+      recommendations: data.recommendations || "",
+    };
 
-    try {
-      // Simulate API call to save consultation notes
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      toast.success("Notes saved successfully");
-    } catch (error) {
-      toast.error("Failed to save notes");
-    } finally {
-      setIsSaving(false);
-    }
+    saveConsultation(payload);
   };
 
   const handleCompleteConsultation = async () => {
-    if (!formData.notes.trim()) {
-      toast.error("Please add consultation notes before completing");
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      const now = new Date();
-      const timeString = `${now.getHours().toString().padStart(2, "0")}:${now
-        .getMinutes()
-        .toString()
-        .padStart(2, "0")}`;
-      setEndTime(timeString);
-      setConsultationStatus("completed");
-
-      // Simulate API call to complete consultation
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      toast.success("Consultation completed successfully!");
-
-      // Navigate back to doctor dashboard after a delay
-      setTimeout(() => {
-        navigate("/doctor");
-      }, 1000);
-    } catch (error) {
-      toast.error("Failed to complete consultation");
-    } finally {
-      setIsSaving(false);
-    }
+    completeAppointment(appointmentInfo.appointment.id);
   };
 
   const getStatusBadge = () => {
     const styles = {
-      "not-started": "bg-gray-100 text-gray-800",
-      "in-progress": "bg-yellow-100 text-yellow-800",
+      in_progress: "bg-yellow-100 text-yellow-800",
       completed: "bg-green-100 text-green-800",
+      booked: "bg-blue-100 text-blue-800",
+      cancelled: "bg-red-100 text-red-800",
+      rescheduled: "bg-orange-100 text-orange-800",
     };
 
     const labels = {
-      "not-started": "Not Started",
-      "in-progress": "In Progress",
+      in_progress: "In Progress",
       completed: "Completed",
+      booked: "Booked",
+      cancelled: "Cancelled",
+      rescheduled: "Rescheduled",
     };
 
     return (
-      <Badge className={styles[consultationStatus]}>
-        {labels[consultationStatus]}
+      <Badge className={styles[appointmentInfo.appointment.status]}>
+        {labels[appointmentInfo.appointment.status]}
       </Badge>
     );
   };
@@ -224,25 +199,20 @@ export default function PatientConsultation() {
             Patient Consultation
           </h1>
           <p className="text-gray-600">
-            {apptDate.toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}{" "}
-            • {apptDate.toLocaleDateString()}
+            {formatDate(appointmentInfo.appointment.appointment_date)}•{" "}
+            {formatTime(appointmentInfo.appointment.appointment_date)}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {getStatusBadge()}
-          {consultationStatus === "not-started" && (
-            <Button
-              onClick={handleStartConsultation}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+          {appointmentInfo.appointment.status === "booked" && (
+            <Button onClick={handleStartConsultation} disabled={isStarting}>
               <Play className="w-4 h-4 mr-2" />
               Start Consultation
             </Button>
           )}
-          {consultationStatus === "in-progress" && (
+
+          {appointmentInfo.appointment.status === "in_progress" && (
             <Button
               onClick={handleCompleteConsultation}
               disabled={isSaving}
@@ -278,8 +248,12 @@ export default function PatientConsultation() {
               </div>
 
               <div>
-                <p className="text-sm text-gray-600">Age</p>
-                <p className="font-medium">{patient?.age} years</p>
+                <p className="text-sm text-gray-600">Date of Birth</p>
+                <p className="font-medium">
+                  {patient?.dateOfBirth
+                    ? formatDate(patient.dateOfBirth)
+                    : "Not provided"}
+                </p>
               </div>
 
               <div>
@@ -289,244 +263,214 @@ export default function PatientConsultation() {
 
               <div>
                 <p className="text-sm text-gray-600">Email</p>
-                <p className="font-medium">{patient?.email}</p>
+                <p className="font-medium">
+                  {patient?.email || "Not provided"}
+                </p>
               </div>
 
-              <div>
-                <p className="text-sm text-gray-600">Address</p>
-                <p className="font-medium">{patient?.address}</p>
-              </div>
-
-              {patient?.medicalHistory && (
+              {patient?.medicalCondition && (
                 <div>
-                  <p className="text-sm text-gray-600">Medical History</p>
+                  <p className="text-sm text-gray-600">Medical Condition</p>
                   <p className="font-medium text-sm bg-orange-50 p-2 rounded border">
-                    {patient.medicalHistory}
+                    {patient.medicalCondition}
                   </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
 
-          {/* Session Timer */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                Session Time
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {startTime && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Started:</span>
-                    <span className="font-medium">{startTime}</span>
-                  </div>
-                )}
-
-                {endTime && (
-                  <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Ended:</span>
-                    <span className="font-medium">{endTime}</span>
-                  </div>
-                )}
-
-                {!startTime && (
-                  <p className="text-sm text-gray-500 text-center py-4">
-                    Consultation not started yet
+              {patient?.currentMedication && (
+                <div>
+                  <p className="text-sm text-gray-600">Current Medication</p>
+                  <p className="font-medium text-sm bg-blue-50 p-2 rounded border">
+                    {patient.currentMedication}
                   </p>
-                )}
+                </div>
+              )}
 
-                {startTime &&
-                  !endTime &&
-                  consultationStatus === "in-progress" && (
-                    <div className="text-center py-2">
-                      <div className="text-lg font-medium text-green-600">
-                        🔴 Session Active
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Started at {startTime}
-                      </p>
-                    </div>
-                  )}
-              </div>
+              {patient?.knownAllergies && (
+                <div>
+                  <p className="text-sm text-gray-600">Known Allergies</p>
+                  <p className="font-medium text-sm bg-red-50 p-2 rounded border">
+                    {patient.knownAllergies}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
         {/* Consultation Form */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Consultation Notes */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  Consultation Notes
-                </span>
-                <Button
-                  onClick={handleSaveNotes}
-                  disabled={isSaving || consultationStatus === "not-started"}
-                  size="sm"
-                  variant="outline"
-                >
-                  {isSaving ? "Saving..." : "Save Notes"}
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="notes">Clinical Notes *</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Enter patient examination findings, symptoms, diagnosis, and observations..."
-                    value={formData.notes}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        notes: e.target.value,
-                      }))
-                    }
-                    rows={8}
-                    disabled={
-                      consultationStatus === "not-started" ||
-                      consultationStatus === "completed"
-                    }
-                  />
-                  <p className="text-xs text-gray-500">
-                    Include symptoms, examination findings, diagnosis, and
-                    treatment plan
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Prescriptions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Pill className="w-5 h-5" />
-                Prescriptions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Add Prescription */}
-                {consultationStatus === "in-progress" && (
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="e.g., Paracetamol 500mg twice daily"
-                      value={formData.currentPrescription}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          currentPrescription: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleAddPrescription();
-                        }
-                      }}
-                    />
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSaveNotes)}>
+              {/* Consultation Notes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <FileText className="w-5 h-5" />
+                      Consultation Notes
+                    </span>
                     <Button
-                      onClick={handleAddPrescription}
-                      disabled={!formData.currentPrescription.trim()}
+                      type="submit"
+                      disabled={
+                        isCompleting || isStarting || !form.formState.isValid
+                      }
+                      size="sm"
+                      variant="outline"
                     >
-                      Add
+                      {isCompleting || isStarting ? "Saving..." : "Save Notes"}
                     </Button>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel required>Clinical Notes</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Enter patient examination findings, symptoms, diagnosis, and observations..."
+                              rows={8}
+                              disabled={
+                                appointmentInfo.appointment.status ===
+                                  "booked" ||
+                                appointmentInfo.appointment.status ===
+                                  "completed"
+                              }
+                              {...field}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-gray-500">
+                            Include symptoms, examination findings, diagnosis,
+                            and treatment plan
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-                )}
+                </CardContent>
+              </Card>
 
-                {/* Prescription List */}
-                <div className="space-y-2">
-                  {formData.prescriptions.map((prescription, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-3 bg-blue-50 rounded-lg"
-                    >
-                      <span className="font-medium">{prescription}</span>
-                      {consultationStatus === "in-progress" && (
+              {/* Prescriptions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Pill className="w-5 h-5" />
+                    Prescriptions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Add Prescription */}
+                    {appointmentInfo.appointment.status === "in_progress" && (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="e.g., Paracetamol 500mg twice daily"
+                          value={currentPrescription}
+                          onChange={(e) =>
+                            setCurrentPrescription(e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddPrescription();
+                            }
+                          }}
+                        />
                         <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRemovePrescription(index)}
+                          onClick={handleAddPrescription}
+                          disabled={!currentPrescription.trim()}
                         >
-                          Remove
+                          Add
                         </Button>
+                      </div>
+                    )}
+
+                    {/* Prescription List */}
+                    <div className="space-y-2">
+                      {prescriptions.map((prescription, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-blue-50 rounded-lg"
+                        >
+                          <span className="font-medium">{prescription}</span>
+                          {appointmentInfo.appointment.status ===
+                            "in_progress" && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRemovePrescription(index)}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+
+                      {prescriptions.length === 0 && (
+                        <div className="text-center py-4 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                          No prescriptions added yet
+                        </div>
                       )}
                     </div>
-                  ))}
+                  </div>
+                </CardContent>
+              </Card>
 
-                  {formData.prescriptions.length === 0 && (
-                    <div className="text-center py-4 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                      No prescriptions added yet
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recommendations */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Recommendations & Follow-up</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="recommendations">
-                  Treatment Recommendations
-                </Label>
-                <Textarea
-                  id="recommendations"
-                  placeholder="Enter follow-up instructions, lifestyle recommendations, next appointment schedule..."
-                  value={formData.recommendations}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      recommendations: e.target.value,
-                    }))
-                  }
-                  rows={4}
-                  disabled={
-                    consultationStatus === "not-started" ||
-                    consultationStatus === "completed"
-                  }
-                />
-                <p className="text-xs text-gray-500">
-                  Include follow-up schedule, lifestyle changes, and any
-                  additional recommendations
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+              {/* Recommendations */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Recommendations & Follow-up</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <FormField
+                    control={form.control}
+                    name="recommendations"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Treatment Recommendations</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Enter follow-up instructions, lifestyle recommendations, next appointment schedule..."
+                            rows={4}
+                            disabled={
+                              appointmentInfo.appointment.status === "booked" ||
+                              appointmentInfo.appointment.status === "completed"
+                            }
+                            {...field}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-gray-500">
+                          Include follow-up schedule, lifestyle changes, and any
+                          additional recommendations
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </CardContent>
+              </Card>
+            </form>
+          </Form>
 
           {/* Action Buttons */}
-          {consultationStatus !== "completed" && (
+          {appointmentInfo.appointment.status !== "completed" && (
             <div className="flex justify-end gap-3">
-              <Button
-                variant="outline"
-                disabled={consultationStatus === "not-started"}
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Save Draft
-              </Button>
-
               <Button
                 onClick={handleCompleteConsultation}
                 disabled={
-                  consultationStatus === "not-started" ||
-                  !formData.notes.trim() ||
-                  isSaving
+                  appointmentInfo.appointment.status === "booked" ||
+                  !watchedNotes?.trim() ||
+                  isCompleting ||
+                  isStarting
                 }
                 className="bg-green-600 hover:bg-green-700"
               >
-                {isSaving ? (
+                {isCompleting || isStarting ? (
                   "Completing..."
                 ) : (
                   <>
@@ -538,7 +482,7 @@ export default function PatientConsultation() {
             </div>
           )}
 
-          {consultationStatus === "completed" && (
+          {appointmentInfo.appointment.status === "completed" && (
             <Card className="bg-green-50 border-green-200">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 text-green-800">
@@ -546,8 +490,11 @@ export default function PatientConsultation() {
                   <span className="font-medium">Consultation Completed</span>
                 </div>
                 <p className="text-sm text-green-600 mt-1">
-                  Session completed at {endTime}. Patient record has been
-                  updated.
+                  Session completed at{" "}
+                  {formatTime(
+                    appointmentInfo.appointment.updated_at || new Date()
+                  )}
+                  . updated.
                 </p>
               </CardContent>
             </Card>

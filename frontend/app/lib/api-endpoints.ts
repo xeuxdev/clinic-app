@@ -12,10 +12,11 @@ export const API_ENDPOINTS = {
     GET_BY_ID: (id: string | number) => `/appointment/${id}`,
     TODAY: "/appointment/today",
     SEARCH: (query: string) => `/appointment/search?q=${query}`,
-    START: (id: string | number) => `/appointment/in_progress/${id}`,
+    START: (id: string | number) => `/appointment/start/${id}`,
     RESCHEDULE: (id: string | number) => `/appointment/reschedule/${id}`,
     CANCEL: (id: string | number) => `/appointment/cancel/${id}`,
     COMPLETE: (id: string | number) => `/appointment/complete/${id}`,
+    SAVE_CONSULTATION: "/appointment/consultation",
   },
   PATIENTS: {
     GET_ALL: "/patients",
