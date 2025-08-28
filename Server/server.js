@@ -9,6 +9,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 6000;
 
+console.log(process.env.FRONTEND_URL);
+
 app.use(express.json());
 app.use(cookieParser());
 app.use(
