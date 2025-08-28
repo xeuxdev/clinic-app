@@ -68,7 +68,7 @@ export default function Signup() {
       email: data.email,
       phone_number: data.phoneNumber,
       password: data.password,
-      role: data.role,
+      role: "attendant",
     });
   };
 
@@ -196,7 +196,7 @@ export default function Signup() {
                 )}
               />
 
-              <FormField
+              {/* <FormField
                 control={form.control}
                 name="role"
                 render={({ field }) => (
@@ -223,7 +223,7 @@ export default function Signup() {
                     <FormMessage />
                   </FormItem>
                 )}
-              />
+              /> */}
 
               <Button
                 type="submit"
