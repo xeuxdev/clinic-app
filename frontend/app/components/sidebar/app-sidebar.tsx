@@ -98,9 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <Activity className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              🏥 Clinic MS
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900">🏥 HealZone</h2>
             <p className="text-sm text-gray-600 capitalize">
               {userRole} Portal
             </p>
