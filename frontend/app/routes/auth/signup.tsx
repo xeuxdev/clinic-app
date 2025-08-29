@@ -15,13 +15,6 @@ import {
 } from "~/components/ui/form";
 import { Icons } from "~/components/ui/icons";
 import { Input, PasswordInput } from "~/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 
 const signupSchema = z
   .object({
@@ -30,9 +23,6 @@ const signupSchema = z
     phoneNumber: z.string().min(10, "Please enter a valid phone number"),
     password: z.string().min(8, "Password must be at least 8 characters"),
     confirmPassword: z.string(),
-    role: z.enum(["doctor", "attendant"], {
-      message: "Role is required",
-    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -49,7 +39,7 @@ export function meta() {
 }
 
 export default function Signup() {
-  const { mutateAsync } = useSignUp();
+  const { mutateAsync, isPending } = useSignUp();
 
   const form = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
@@ -196,41 +186,12 @@ export default function Signup() {
                 )}
               />
 
-              {/* <FormField
-                control={form.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>Role</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Select
-                          value={field.value}
-                          onValueChange={(val) => field.onChange(val)}
-                        >
-                          <SelectTrigger className="pl-10 bg-white border-border w-full">
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-
-                          <SelectContent>
-                            <SelectItem value="doctor">Doctor</SelectItem>
-                            <SelectItem value="attendant">Attendant</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Icons.Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              /> */}
-
               <Button
                 type="submit"
                 className="w-full"
-                disabled={form.formState.isSubmitting}
+                disabled={form.formState.isSubmitting || isPending}
               >
-                {form.formState.isSubmitting ? "Creating Account..." : "Next"}
+                {isPending ? "Creating Account..." : "Next"}
               </Button>
             </form>
           </Form>
