@@ -310,7 +310,7 @@ export default function AppointmentsPage() {
                             <Link to={`/doctor/consultation/${appointment.id}`}>
                               <Button
                                 size="sm"
-                                disabled={appointment.status !== "booked"}
+                                disabled={appointment.status === "completed"}
                               >
                                 <PlayIcon className="w-3 h-3 mr-1" />
                                 Start
