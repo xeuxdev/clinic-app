@@ -24,6 +24,9 @@ import {
 } from "../controller/patient.controller.js";
 import { verifyRole } from "../middleware/verifyRole.js";
 import { verifySession } from "../middleware/verifySession.js";
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 export const authRoute = express.Router();
 authRoute.post("/register-patient", verifySession, verifyRole, patientRegister);
